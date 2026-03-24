@@ -455,12 +455,14 @@ async function loadFromSheet() {
       parseSheetData(data.rows);
     }
     setSyncStatus('synced', '已同步');
+    // 重新套用 UI 權限（確保盤點按鈕狀態正確）
+    if (currentRole) applyRoleUI();
     renderAll();
   } catch(e) {
     setSyncStatus('error', '同步失敗');
     toast('⚠️ 無法連線，顯示本地資料');
-    // use default data if empty
     if (items.length === 0) loadDefaultData();
+    if (currentRole) applyRoleUI();
     renderAll();
   }
 }
