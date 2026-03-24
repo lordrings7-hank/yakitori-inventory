@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>串燒店｜庫存叫料管理系統</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f0d0b;--surface:#1a1714;--surface2:#232019;--border:#332e28;
+  --accent:#e8863a;--accent2:#c45c1a;--warn:#e8c53a;--danger:#e84a3a;
+  --ok:#4ae89a;--text:#f0e8dc;--text2:#a09080;--text3:#6a5a4a;
+  --mono:'DM Mono',monospace;--sans:'Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 60% 40%,#2a1a0a 0%,var(--bg) 70%);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;width:90%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.login-logo{text-align:center;margin-bottom:2rem;}
+.login-logo .icon{font-size:2.5rem;display:block;margin-bottom:8px;}
+.login-logo .title{font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.05em;}
+.login-logo .sub{font-size:.72rem;color:var(--text3);letter-spacing:.12em;margin-top:3px;}
+.role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:1.5rem;}
+.role-tab{padding:10px;border-radius:8px;border:1px solid var(--border);cursor:pointer;text-align:center;font-size:.82rem;color:var(--text3);transition:all .15s;background:var(--surface2);}
+.role-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(232,134,58,.08);}
+.role-tab .role-icon{font-size:1.3rem;display:block;margin-bottom:4px;}
+.login-btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--sans);margin-top:.5rem;transition:background .15s;}
+.login-btn:hover{background:var(--accent2);}
+.login-error{color:var(--danger);font-size:.78rem;text-align:center;margin-top:10px;min-height:18px;}
+.login-hint{font-size:.72rem;color:var(--text3);margin-top:4px;}
+
+#app{display:none;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;}
+.logo{display:flex;align-items:center;gap:8px;}
+.logo-icon{font-size:1.3rem;}
+.logo-text{font-size:.95rem;font-weight:700;color:var(--accent);}
+.logo-sub{font-size:.62rem;color:var(--text3);letter-spacing:.1em;}
+.header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.user-badge{display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:.75rem;}
+.role-dot{width:6px;height:6px;border-radius:50%;}
+.role-dot.admin{background:var(--accent);}
+.role-dot.staff{background:var(--ok);}
+.sync-status{font-size:.7rem;color:var(--text3);display:flex;align-items:center;gap:4px;}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.sync-dot.syncing{background:var(--warn);animation:pulse 1s infinite;}
+.sync-dot.synced{background:var(--ok);}
+.sync-dot.error{background:var(--danger);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+.btn{padding:6px 14px;border-radius:6px;border:none;cursor:pointer;font-family:var(--sans);font-size:.8rem;font-weight:500;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-warn{background:rgba(232,197,58,.15);color:var(--warn);border:1px solid rgba(232,197,58,.3);}
+.btn-sm{padding:4px 10px;font-size:.75rem;}
+.btn-del{background:rgba(232,74,58,.12);color:var(--danger);border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:.75rem;font-family:var(--sans);}
+
+.tabs{display:flex;border-bottom:1px solid var(--border);padding:0 1rem;background:var(--surface);overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.tab{padding:11px 16px;cursor:pointer;font-size:.82rem;color:var(--text3);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab:hover:not(.active){color:var(--text2);}
+.admin-tag{font-size:.55rem;background:rgba(232,134,58,.15);color:var(--accent);border-radius:3px;padding:1px 4px;margin-left:4px;vertical-align:middle;}
+
+main{padding:1.2rem;max-width:1100px;margin:0 auto;}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin-bottom:1.5rem;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.2rem;}
+.stat-label{font-size:.72rem;color:var(--text3);letter-spacing:.07em;margin-bottom:5px;}
+.stat-value{font-size:1.6rem;font-weight:700;font-family:var(--mono);}
+.stat-value.warn{color:var(--warn);}.stat-value.danger{color:var(--danger);}.stat-value.ok{color:var(--ok);}.stat-value.accent{color:var(--accent);}
+.stat-sub{font-size:.68rem;color:var(--text3);margin-top:3px;}
+
+.toolbar{display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap;}
+.search-box{flex:1;min-width:160px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 12px;color:var(--text);font-size:.83rem;font-family:var(--sans);outline:none;}
+.search-box:focus{border-color:var(--accent);}
+.search-box::placeholder{color:var(--text3);}
+select.filter{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text2);font-size:.8rem;outline:none;font-family:var(--sans);cursor:pointer;}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;min-width:580px;}
+thead th{padding:10px 12px;text-align:left;font-size:.68rem;font-weight:500;color:var(--text3);letter-spacing:.1em;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--surface2);}
+td{padding:10px 12px;font-size:.83rem;vertical-align:middle;}
+td.name{font-weight:500;}td.mono{font-family:var(--mono);font-size:.8rem;}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:500;}
+.badge-ok{background:rgba(74,232,154,.12);color:var(--ok);}
+.badge-warn{background:rgba(232,197,58,.12);color:var(--warn);}
+.badge-danger{background:rgba(232,74,58,.12);color:var(--danger);}
+.badge-cat{background:rgba(232,134,58,.1);color:var(--accent);}
+.stock-bar-wrap{display:flex;align-items:center;gap:6px;}
+.stock-bar{flex:1;height:4px;background:var(--border);border-radius:3px;overflow:hidden;min-width:40px;}
+.stock-bar-fill{height:100%;border-radius:3px;transition:width .3s;}
+.fill-ok{background:var(--ok);}.fill-warn{background:var(--warn);}.fill-danger{background:var(--danger);}
+
+.order-cards{display:flex;flex-direction:column;gap:8px;}
+.order-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.9rem 1.1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;}
+.order-card.pending{border-left:3px solid var(--warn);}
+.order-card.ordered{border-left:3px solid var(--accent);}
+.order-card.received{border-left:3px solid var(--ok);}
+.order-meta{flex:1;min-width:140px;}
+.order-name{font-weight:600;font-size:.88rem;}
+.order-detail{font-size:.72rem;color:var(--text3);margin-top:2px;font-family:var(--mono);}
+.order-actions{display:flex;gap:5px;flex-wrap:wrap;}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.6rem;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:1rem;font-weight:700;margin-bottom:1.2rem;color:var(--accent);}
+.fi{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--text);font-size:.85rem;font-family:var(--sans);outline:none;}
+.fi:focus{border-color:var(--accent);}
+.fl{font-size:.72rem;color:var(--text3);margin-bottom:4px;letter-spacing:.05em;display:block;}
+.fr{margin-bottom:.9rem;}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:1.2rem;}
+
+.alert-bar{background:rgba(232,74,58,.1);border:1px solid rgba(232,74,58,.3);border-radius:8px;padding:9px 12px;margin-bottom:1rem;font-size:.8rem;color:var(--danger);}
+.alert-bar.warn{background:rgba(232,197,58,.1);border-color:rgba(232,197,58,.3);color:var(--warn);}
+
+.stocktake-grid{display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow-y:auto;padding-right:4px;}
+.st-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;}
+.st-name{flex:1;min-width:0;}
+.st-name-text{font-size:.85rem;font-weight:500;}
+.st-cat{font-size:.7rem;color:var(--text3);}
+.st-input{width:76px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:.85rem;font-family:var(--mono);outline:none;text-align:center;}
+.st-input:focus{border-color:var(--accent);}
+.st-unit{font-size:.73rem;color:var(--text3);min-width:22px;}
+.st-diff{font-size:.73rem;font-family:var(--mono);min-width:46px;text-align:right;}
+
+.cat-list{display:flex;flex-direction:column;gap:6px;margin-bottom:1rem;}
+.cat-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;}
+.cat-name-edit{flex:1;background:transparent;border:none;color:var(--text);font-size:.85rem;font-family:var(--sans);outline:none;padding:2px 4px;border-radius:4px;}
+.cat-name-edit:focus{background:var(--bg);border:1px solid var(--accent);}
+.add-cat-row{display:flex;gap:8px;}
+
+/* TOGGLE SWITCH */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-info{flex:1;}
+.toggle-label{font-size:.86rem;font-weight:500;}
+.toggle-desc{font-size:.7rem;color:var(--text3);margin-top:2px;}
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:24px;cursor:pointer;transition:.2s;}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+.toggle input:checked+.toggle-slider{background:var(--ok);}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);}
+
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;}
+.admin-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.3rem;}
+.admin-card-title{font-size:.88rem;font-weight:700;color:var(--accent);margin-bottom:1rem;}
+.pwd-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);}
+.pwd-row:last-child{border-bottom:none;}
+.pwd-info{flex:1;}
+.pwd-name{font-size:.86rem;font-weight:500;}
+.pwd-role{font-size:.7rem;color:var(--text3);margin-top:2px;}
+
+/* LOADING */
+#loadingScreen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:500;gap:1rem;}
+.loading-icon{font-size:2.5rem;animation:spin 1.5s linear infinite;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.loading-text{color:var(--text2);font-size:.88rem;}
+
+.page{display:none;}.page.active{display:block;}
+.empty{text-align:center;padding:2.5rem;color:var(--text3);font-size:.83rem;}
+.section-title{font-size:.9rem;font-weight:700;margin-bottom:.9rem;display:flex;align-items:center;gap:8px;}
+.section-title span{font-size:.7rem;color:var(--text3);font-weight:400;}
+
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:.83rem;color:var(--text);z-index:999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:280px;}
+#toast.show{opacity:1;transform:translateY(0);}
+
+@media(max-width:640px){
+  .stats{grid-template-columns:repeat(2,1fr);}
+  main{padding:.8rem;}
+  header{padding:0 .8rem;}
+  .admin-grid{grid-template-columns:1fr;}
+  .fr2{grid-template-columns:1fr;}
+  .header-right .sync-status{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="loading-icon">🔥</div>
+  <div class="loading-text">載入中…</div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none;">
+  <div class="login-box">
+    <div class="login-logo">
+      <span class="icon">🔥</span>
+      <div class="title">串燒庫存管理系統</div>
+      <div class="sub">YAKITORI INVENTORY</div>
+    </div>
+    <div class="role-tabs">
+      <div class="role-tab active" onclick="selectRole('admin',this)"><span class="role-icon">👑</span>老闆／管理員</div>
+      <div class="role-tab" onclick="selectRole('staff',this)"><span class="role-icon">👨‍🍳</span>員工</div>
+    </div>
+    <div class="fr">
+      <label class="fl">密碼</label>
+      <input class="fi" type="password" id="loginPwd" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="login-hint" id="loginHint">管理員預設密碼：admin123</div>
+    </div>
+    <button class="login-btn" onclick="doLogin()">登入</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🔥</span>
+      <div><div class="logo-text">串燒庫存系統</div><div class="logo-sub">YAKITORI INVENTORY</div></div>
+    </div>
+    <div class="header-right">
+      <div class="sync-status"><div class="sync-dot" id="syncDot"></div><span id="syncText">同步中…</span></div>
+      <div class="user-badge"><div class="role-dot" id="headerDot"></div><span id="headerUserName"></span></div>
+      <div id="headerAdminBtns" style="display:flex;gap:6px;">
+        <button class="btn btn-warn btn-sm" onclick="openStocktake()">📋 盤點</button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('addItem')">＋ 新增</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('addOrder')">🛒 叫料</button>
+      </div>
+      <div id="headerStaffBtns" style="display:none;gap:6px;">
+        <button class="btn btn-warn btn-sm" onclick="openStocktake()">📋 盤點</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchPage('inventory',this)">📦 庫存</div>
+    <div class="tab" onclick="switchPage('alerts',this)">🔔 補貨提醒</div>
+    <div class="tab" onclick="switchPage('orders',this)">🛒 叫料紀錄</div>
+    <div class="tab" id="tabAdmin" onclick="switchPage('admin',this)">⚙️ 設定<span class="admin-tag">管理員</span></div>
+  </div>
+
+  <main>
+    <div class="page active" id="page-inventory">
+      <div class="stats" id="statsBar"></div>
+      <div class="toolbar">
+        <input class="search-box" type="text" placeholder="搜尋食材…" oninput="renderInventory()" id="searchInput">
+        <select class="filter" onchange="renderInventory()" id="catFilter"><option value="">全部分類</option></select>
+        <select class="filter" onchange="renderInventory()" id="statusFilter">
+          <option value="">全部狀態</option>
+          <option value="danger">庫存不足</option><option value="warn">庫存偏低</option><option value="ok">庫存正常</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadFromSheet()">🔄 重新整理</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>食材名稱</th><th>分類</th><th>現有數量</th><th>安全庫存</th><th>庫存狀態</th><th>最後更新</th><th>操作</th></tr></thead>
+          <tbody id="inventoryBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="page" id="page-alerts"><div id="alertContent"></div></div>
+    <div class="page" id="page-orders">
+      <div class="section-title">叫料紀錄 <span>到貨後庫存自動更新</span></div>
+      <div class="order-cards" id="orderList"></div>
+    </div>
+    <div class="page" id="page-admin"><div id="adminPageContent"></div></div>
+  </main>
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="modal-addItem">
+  <div class="modal">
+    <div class="modal-title">＋ 新增食材</div>
+    <div class="fr"><label class="fl">食材名稱</label><input class="fi" id="f-name" placeholder="例：雞腿肉"></div>
+    <div class="fr2">
+      <div class="fr"><label class="fl">分類</label><select class="fi" id="f-cat"></select></div>
+      <div class="fr"><label class="fl">單位</label><input class="fi" id="f-unit" placeholder="kg / 包 / 瓶"></div>
+    </div>
+    <div class="fr2">
+      <div class="fr"><label class="fl">現有數量</label><input class="fi" type="number" id="f-qty" placeholder="0" min="0"></div>
+      <div class="fr"><label class="fl">安全庫存量</label><input class="fi" type="number" id="f-safe" placeholder="0" min="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addItem')">取消</button>
+      <button class="btn btn-primary" onclick="addItem()">新增</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-editQty">
+  <div class="modal">
+    <div class="modal-title">調整庫存數量</div>
+    <div id="editQtyInfo" style="font-size:.84rem;color:var(--text2);margin-bottom:1rem;padding:10px;background:var(--surface2);border-radius:7px;"></div>
+    <div class="fr2">
+      <div class="fr"><label class="fl">操作類型</label>
+        <select class="fi" id="eq-op">
+          <option value="add">＋ 進貨增加</option>
+          <option value="sub">－ 消耗減少</option>
+          <option value="set">＝ 直接設定</option>
+        </select>
+      </div>
+      <div class="fr"><label class="fl">數量</label><input class="fi" type="number" id="eq-qty" placeholder="0" min="0"></div>
+    </div>
+    <div class="fr"><label class="fl">備註（選填）</label><input class="fi" id="eq-note" placeholder="例：今日進貨、備料消耗…"></div>
+    <input type="hidden" id="eq-id">
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editQty')">取消</button>
+      <button class="btn btn-primary" onclick="saveQty()">確認</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-editSafe">
+  <div class="modal">
+    <div class="modal-title">⚙️ 修改安全庫存</div>
+    <div id="editSafeInfo" style="font-size:.84rem;color:var(--text2);margin-bottom:1rem;padding:10px;background:var(--surface2);border-radius:7px;"></div>
+    <div class="fr2">
+      <div class="fr"><label class="fl">安全庫存量</label><input class="fi" type="number" id="es-safe" min="0"></div>
+      <div class="fr"><label class="fl">單位</label><input class="fi" id="es-unit"></div>
+    </div>
+    <input type="hidden" id="es-id">
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editSafe')">取消</button>
+      <button class="btn btn-primary" onclick="saveSafe()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-stocktake">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-title">📋 庫存盤點</div>
+    <div style="font-size:.78rem;color:var(--text3);margin-bottom:.9rem;">輸入實際數量，空白表示不修改</div>
+    <div style="display:flex;gap:8px;margin-bottom:.8rem;">
+      <select class="fi" id="st-catFilter" onchange="renderStocktake()" style="flex:1;padding:6px 10px;font-size:.8rem;"><option value="">全部分類</option></select>
+    </div>
+    <div class="stocktake-grid" id="stocktakeGrid"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('stocktake')">取消</button>
+      <button class="btn btn-primary" onclick="saveStocktake()">✅ 確認盤點</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-addOrder">
+  <div class="modal">
+    <div class="modal-title">🛒 建立叫料單</div>
+    <div class="fr"><label class="fl">食材</label><select class="fi" id="ao-item"></select></div>
+    <div class="fr2">
+      <div class="fr"><label class="fl">叫料數量</label><input class="fi" type="number" id="ao-qty" placeholder="0" min="0"></div>
+      <div class="fr"><label class="fl">供應商</label><input class="fi" id="ao-supplier" placeholder="供應商名稱"></div>
+    </div>
+    <div class="fr"><label class="fl">預計到貨日</label><input class="fi" type="date" id="ao-date"></div>
+    <div class="fr"><label class="fl">備註</label><input class="fi" id="ao-note" placeholder="可留備注"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addOrder')">取消</button>
+      <button class="btn btn-primary" onclick="addOrder()">建立</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modal-changePwd">
+  <div class="modal">
+    <div class="modal-title">🔑 修改密碼</div>
+    <div id="changePwdTarget" style="font-size:.84rem;color:var(--text2);margin-bottom:1rem;padding:10px;background:var(--surface2);border-radius:7px;"></div>
+    <div class="fr"><label class="fl">新密碼（至少4碼）</label><input class="fi" type="password" id="cp-pwd"></div>
+    <div class="fr"><label class="fl">確認新密碼</label><input class="fi" type="password" id="cp-pwd2"></div>
+    <input type="hidden" id="cp-role">
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('changePwd')">取消</button>
+      <button class="btn btn-primary" onclick="savePassword()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══ CONFIG ════════════════════════════════════
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxFdXWwCu1jtg0s01sSSkWw7QG0xX4norAlLeR-mlIxQLJT_YsL4HGJqIqPpI7t3wl_/exec';
+
+// ══ AUTH ══════════════════════════════════════
+let passwords = {admin:'admin123', staff:'staff123'};
+let staffPermissions = { canStocktake: false }; // 員工權限開關
+let currentRole = null;
+let selectedLoginRole = 'admin';
+
+function selectRole(role, el) {
+  selectedLoginRole = role;
+  document.querySelectorAll('.role-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginHint').textContent = role==='admin' ? '管理員預設密碼：admin123' : '員工預設密碼：staff123';
+}
+
+function doLogin() {
+  const pwd = document.getElementById('loginPwd').value;
+  if (pwd === passwords[selectedLoginRole]) {
+    currentRole = selectedLoginRole;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    applyRoleUI();
+    loadFromSheet();
+  } else {
+    document.getElementById('loginError').textContent = '密碼錯誤，請再試一次';
+    document.getElementById('loginPwd').value = '';
+  }
+}
+
+function logout() {
+  currentRole = null;
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  switchPageById('inventory');
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+}
+
+function isAdmin() { return currentRole === 'admin'; }
+
+function applyRoleUI() {
+  document.getElementById('headerDot').className = 'role-dot ' + currentRole;
+  document.getElementById('headerUserName').textContent = isAdmin() ? '👑 管理員' : '👨‍🍳 員工';
+  document.getElementById('headerAdminBtns').style.display = isAdmin() ? 'flex' : 'none';
+  document.getElementById('tabAdmin').style.display = isAdmin() ? 'block' : 'none';
+  // 員工盤點按鈕
+  const staffBtns = document.getElementById('headerStaffBtns');
+  if (staffBtns) staffBtns.style.display = (!isAdmin() && staffPermissions.canStocktake) ? 'flex' : 'none';
+}
+
+// ══ DATA ══════════════════════════════════════
+let categories = ['肉類','海鮮','蔬菜','醬料','耗材'];
+let items = [];
+let orders = [];
+let nextId = 1;
+let nextOid = 1;
+const today = new Date().toISOString().slice(0,10);
+
+// ══ SYNC STATUS ═══════════════════════════════
+function setSyncStatus(status, text) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  dot.className = 'sync-dot ' + status;
+  txt.textContent = text;
+}
+
+// ══ GOOGLE SHEETS API ════════════════════════
+async function loadFromSheet() {
+  setSyncStatus('syncing', '同步中…');
+  try {
+    const res = await fetch(GAS_URL + '?action=read');
+    const data = await res.json();
+    if (data.rows && data.rows.length > 1) {
+      parseSheetData(data.rows);
+    }
+    setSyncStatus('synced', '已同步');
+    renderAll();
+  } catch(e) {
+    setSyncStatus('error', '同步失敗');
+    toast('⚠️ 無法連線，顯示本地資料');
+    // use default data if empty
+    if (items.length === 0) loadDefaultData();
+    renderAll();
+  }
+}
+
+function parseSheetData(rows) {
+  // rows[0] = headers: id, name, cat, qty, safe, unit, lastIn, type
+  // type: 'item' or 'order_...'
+  items = [];
+  orders = [];
+  let maxItemId = 0, maxOrderId = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    const type = r[7] || 'item';
+    if (type === 'item') {
+      const item = {
+        id: parseInt(r[0]),
+        name: r[1] || '',
+        cat: r[2] || '',
+        qty: parseFloat(r[3]) || 0,
+        safe: parseFloat(r[4]) || 0,
+        unit: r[5] || '',
+        lastIn: r[6] || today,
+      };
+      items.push(item);
+      if (item.id > maxItemId) maxItemId = item.id;
+    } else if (type === 'order') {
+      const order = {
+        id: parseInt(r[0]),
+        itemId: parseInt(r[1]),
+        itemName: r[2] || '',
+        qty: parseFloat(r[3]) || 0,
+        unit: r[4] || '',
+        supplier: r[5] || '',
+        date: r[6] || today,
+        status: r[7] ? r[7].replace('order_','') : 'pending',
+        note: r[8] || '',
+      };
+      // re-map fields for orders stored differently
+      orders.push(order);
+      if (order.id > maxOrderId) maxOrderId = order.id;
+    } else if (type === 'cat') {
+      // categories stored as cat rows
+      try { categories = JSON.parse(r[1]); } catch(e) {}
+    } else if (type === 'pwd') {
+      try { const p = JSON.parse(r[1]); passwords.admin = p.admin||passwords.admin; passwords.staff = p.staff||passwords.staff; } catch(e) {}
+    } else if (type === 'perm') {
+      try { staffPermissions = JSON.parse(r[1]); } catch(e) {}
+    }
+  }
+  nextId = maxItemId + 1;
+  nextOid = maxOrderId + 1;
+}
+
+async function saveToSheet() {
+  setSyncStatus('syncing', '儲存中…');
+  try {
+    const rows = [['id','name','cat','qty','safe','unit','lastIn','type']];
+    // save categories
+    rows.push(['0', JSON.stringify(categories), '', '', '', '', today, 'cat']);
+    // save passwords
+    rows.push(['0', JSON.stringify(passwords), '', '', '', '', today, 'pwd']);
+    // save staff permissions
+    rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today, 'perm']);
+    // save items
+    items.forEach(item => {
+      rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item']);
+    });
+    // save orders
+    orders.forEach(o => {
+      rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'']);
+    });
+
+    await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({action:'write', rows}),
+    });
+    setSyncStatus('synced', '已儲存 ✓');
+  } catch(e) {
+    setSyncStatus('error', '儲存失敗');
+    toast('⚠️ 儲存失敗，請檢查網路連線');
+  }
+}
+
+function loadDefaultData() {
+  categories = ['肉類','海鮮','蔬菜','醬料','耗材'];
+  items = [
+    {id:1,name:'雞腿肉',cat:'肉類',qty:12,safe:10,unit:'kg',lastIn:today},
+    {id:2,name:'雞胸肉',cat:'肉類',qty:8,safe:8,unit:'kg',lastIn:today},
+    {id:3,name:'豬五花',cat:'肉類',qty:3,safe:8,unit:'kg',lastIn:today},
+    {id:4,name:'牛舌',cat:'肉類',qty:5,safe:4,unit:'kg',lastIn:today},
+    {id:5,name:'雞心',cat:'肉類',qty:2,safe:5,unit:'kg',lastIn:today},
+    {id:6,name:'蝦子',cat:'海鮮',qty:6,safe:4,unit:'kg',lastIn:today},
+    {id:7,name:'透抽',cat:'海鮮',qty:1,safe:3,unit:'kg',lastIn:today},
+    {id:8,name:'玉米筍',cat:'蔬菜',qty:20,safe:10,unit:'包',lastIn:today},
+    {id:9,name:'青椒',cat:'蔬菜',qty:4,safe:5,unit:'kg',lastIn:today},
+    {id:10,name:'蔥段',cat:'蔬菜',qty:3,safe:6,unit:'kg',lastIn:today},
+    {id:11,name:'鹽麴醬',cat:'醬料',qty:2,safe:3,unit:'瓶',lastIn:today},
+    {id:12,name:'味醂',cat:'醬料',qty:5,safe:3,unit:'瓶',lastIn:today},
+    {id:13,name:'串燒竹籤',cat:'耗材',qty:800,safe:500,unit:'支',lastIn:today},
+    {id:14,name:'炭火',cat:'耗材',qty:2,safe:4,unit:'袋',lastIn:today},
+    {id:15,name:'錫箔紙',cat:'耗材',qty:6,safe:4,unit:'卷',lastIn:today},
+  ];
+  orders = [];
+  nextId = 16; nextOid = 1;
+}
+
+// ══ HELPERS ═══════════════════════════════════
+function getStatus(item){const r=item.qty/item.safe;return r<=0.4?'danger':r<=0.8?'warn':'ok';}
+function statusLabel(s){return{danger:'庫存不足',warn:'庫存偏低',ok:'庫存正常'}[s];}
+
+function refreshCatSelects(){
+  const opts = categories.map(c=>`<option value="${c}">${c}</option>`).join('');
+  ['catFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">全部分類</option>'+opts;});
+  ['st-catFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">全部分類</option>'+opts;});
+  ['f-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=opts;});
+}
+
+// ══ RENDER STATS ══════════════════════════════
+function renderStats(){
+  const el=document.getElementById('statsBar');
+  if(!isAdmin()){el.innerHTML='';return;}
+  const total=items.length,danger=items.filter(i=>getStatus(i)==='danger').length,
+    warn=items.filter(i=>getStatus(i)==='warn').length,ok=items.filter(i=>getStatus(i)==='ok').length;
+  el.innerHTML=`
+    <div class="stat-card"><div class="stat-label">總食材種類</div><div class="stat-value accent">${total}</div><div class="stat-sub">項目</div></div>
+    <div class="stat-card"><div class="stat-label">庫存不足</div><div class="stat-value danger">${danger}</div><div class="stat-sub">需立即補貨</div></div>
+    <div class="stat-card"><div class="stat-label">庫存偏低</div><div class="stat-value warn">${warn}</div><div class="stat-sub">即將需補貨</div></div>
+    <div class="stat-card"><div class="stat-label">庫存正常</div><div class="stat-value ok">${ok}</div><div class="stat-sub">無需補貨</div></div>`;
+}
+
+// ══ RENDER INVENTORY ══════════════════════════
+function renderInventory(){
+  const search=document.getElementById('searchInput').value.toLowerCase();
+  const cat=document.getElementById('catFilter').value;
+  const sf=document.getElementById('statusFilter').value;
+  const filtered=items.filter(i=>(!search||i.name.includes(search))&&(!cat||i.cat===cat)&&(!sf||getStatus(i)===sf));
+  const body=document.getElementById('inventoryBody');
+  if(!filtered.length){body.innerHTML='<tr><td colspan="7"><div class="empty">找不到符合的食材</div></td></tr>';return;}
+  body.innerHTML=filtered.map(item=>{
+    const s=getStatus(item),pct=Math.min(100,Math.round(item.qty/item.safe*100));
+    const cls={ok:'fill-ok',warn:'fill-warn',danger:'fill-danger'}[s];
+    let actions=`<button class="btn btn-ghost btn-sm" onclick="openEditQty(${item.id})">調整</button>`;
+    if(isAdmin()) actions+=`
+      <button class="btn btn-ghost btn-sm" onclick="openEditSafe(${item.id})">安全庫存</button>
+      <button class="btn btn-ghost btn-sm" onclick="quickOrder(${item.id})">叫料</button>
+      <button class="btn-del" onclick="deleteItem(${item.id})">刪除</button>`;
+    return`<tr>
+      <td class="name">${item.name}</td>
+      <td><span class="badge badge-cat">${item.cat}</span></td>
+      <td class="mono">${item.qty} ${item.unit}</td>
+      <td class="mono">${isAdmin()?item.safe+' '+item.unit:'<span style="color:var(--text3)">—</span>'}</td>
+      <td><div class="stock-bar-wrap"><div class="stock-bar"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div><span class="badge badge-${s}">${statusLabel(s)}</span></div></td>
+      <td class="mono" style="color:var(--text3);font-size:.73rem;">${item.lastIn}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actions}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ══ RENDER ALERTS ═════════════════════════════
+function renderAlerts(){
+  const needOrder=items.filter(i=>getStatus(i)!=='ok').sort((a,b)=>(getStatus(a)==='danger'?0:1)-(getStatus(b)==='danger'?0:1));
+  let html='';
+  if(!needOrder.length){html='<div class="empty" style="padding:4rem">✅ 目前所有食材庫存充足！</div>';}
+  else{
+    const d=needOrder.filter(i=>getStatus(i)==='danger'),w=needOrder.filter(i=>getStatus(i)==='warn');
+    if(d.length) html+=`<div class="alert-bar">🚨 有 ${d.length} 項食材庫存嚴重不足，請立即叫料！</div>`;
+    if(w.length) html+=`<div class="alert-bar warn">⚠️ 有 ${w.length} 項食材庫存偏低，請盡快安排。</div>`;
+    html+=`<div class="table-wrap"><table>
+      <thead><tr><th>食材</th><th>分類</th><th>現有</th>${isAdmin()?'<th>安全庫存</th><th>缺口</th>':''}<th>狀態</th>${isAdmin()?'<th>操作</th>':''}</tr></thead>
+      <tbody>${needOrder.map(item=>{
+        const s=getStatus(item),gap=Math.max(0,item.safe-item.qty);
+        return`<tr>
+          <td class="name">${item.name}</td>
+          <td><span class="badge badge-cat">${item.cat}</span></td>
+          <td class="mono">${item.qty} ${item.unit}</td>
+          ${isAdmin()?`<td class="mono">${item.safe} ${item.unit}</td><td class="mono" style="color:var(--${s==='danger'?'danger':'warn'})">${gap>0?'−'+gap:'—'} ${item.unit}</td>`:''}
+          <td><span class="badge badge-${s}">${statusLabel(s)}</span></td>
+          ${isAdmin()?`<td><button class="btn btn-primary btn-sm" onclick="quickOrder(${item.id})">立即叫料</button></td>`:''}
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+  }
+  document.getElementById('alertContent').innerHTML=html;
+}
+
+// ══ RENDER ORDERS ═════════════════════════════
+function renderOrders(){
+  const list=document.getElementById('orderList');
+  if(!orders.length){list.innerHTML='<div class="empty">尚無叫料紀錄</div>';return;}
+  const sorted=[...orders].sort((a,b)=>b.id-a.id);
+  list.innerHTML=sorted.map(o=>{
+    const sMap={pending:{label:'待確認',cls:'warn'},ordered:{label:'已下單',cls:'accent'},received:{label:'已到貨',cls:'ok'}};
+    const sm=sMap[o.status]||sMap.pending;
+    const nextLabel={pending:'標記已下單',ordered:'標記已到貨',received:null};
+    return`<div class="order-card ${o.status}">
+      <div class="order-meta">
+        <div class="order-name">${o.itemName}</div>
+        <div class="order-detail">數量：${o.qty} ${o.unit}　供應商：${o.supplier||'—'}　到貨：${o.date}${o.note?'　'+o.note:''}</div>
+      </div>
+      <span class="badge badge-${sm.cls}">${sm.label}</span>
+      <div class="order-actions">
+        ${nextLabel[o.status]?`<button class="btn btn-ghost btn-sm" onclick="advanceOrder(${o.id})">${nextLabel[o.status]}</button>`:''}
+        ${isAdmin()?`<button class="btn-del" onclick="deleteOrder(${o.id})">刪除</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══ ADMIN PAGE ════════════════════════════════
+function renderAdminPage(){
+  if(!isAdmin()){
+    document.getElementById('adminPageContent').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;padding:4rem;color:var(--text3);"><div style="font-size:2.5rem;margin-bottom:1rem;">🔒</div><div>此頁面僅限管理員使用</div></div>`;
+    return;
+  }
+  document.getElementById('adminPageContent').innerHTML=`
+    <div class="admin-grid">
+      <div class="admin-card">
+        <div class="admin-card-title">🏷️ 分類管理</div>
+        <div class="cat-list" id="catList"></div>
+        <div class="add-cat-row">
+          <input class="fi" id="newCatInput" placeholder="新增分類名稱" style="flex:1;">
+          <button class="btn btn-primary btn-sm" onclick="addCategory()">新增</button>
+        </div>
+      </div>
+      <div class="admin-card">
+        <div class="admin-card-title">🔑 帳號密碼管理</div>
+        <div class="pwd-row">
+          <div class="pwd-info"><div class="pwd-name">👑 老闆／管理員</div><div class="pwd-role">擁有完整系統權限</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="openChangePwd('admin')">修改密碼</button>
+        </div>
+        <div class="pwd-row">
+          <div class="pwd-info"><div class="pwd-name">👨‍🍳 員工</div><div class="pwd-role">可查看庫存、調整數量</div></div>
+          <button class="btn btn-ghost btn-sm" onclick="openChangePwd('staff')">修改密碼</button>
+        </div>
+      </div>
+      <div class="admin-card" style="grid-column:1/-1;">
+        <div class="admin-card-title">🛡️ 員工權限設定</div>
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-label">📋 允許員工盤點</div>
+            <div class="toggle-desc">開啟後員工登入可看到「盤點」按鈕，可自行更新庫存數量</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="perm-stocktake" ${staffPermissions.canStocktake?'checked':''} onchange="updatePermission('canStocktake',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>`;
+  renderCatList();
+}
+
+// ══ CATEGORY ══════════════════════════════════
+function renderCatList(){
+  const list=document.getElementById('catList');
+  if(!list)return;
+  list.innerHTML=categories.map((cat,idx)=>`
+    <div class="cat-item">
+      <input class="cat-name-edit" value="${cat}" onblur="renameCategory(${idx},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <button class="btn-del" onclick="deleteCategory(${idx})" ${categories.length<=1?'disabled':''}>刪除</button>
+    </div>`).join('');
+}
+
+function addCategory(){
+  const val=document.getElementById('newCatInput').value.trim();
+  if(!val){toast('請輸入分類名稱');return;}
+  if(categories.includes(val)){toast('此分類已存在');return;}
+  categories.push(val);
+  document.getElementById('newCatInput').value='';
+  renderCatList(); refreshCatSelects();
+  saveToSheet();
+  toast('✅ 已新增分類：'+val);
+}
+
+function renameCategory(idx,newName){
+  newName=newName.trim();
+  if(!newName||newName===categories[idx])return;
+  if(categories.includes(newName)){toast('此分類名稱已存在');renderCatList();return;}
+  const old=categories[idx];
+  categories[idx]=newName;
+  items.forEach(i=>{if(i.cat===old)i.cat=newName;});
+  renderCatList(); refreshCatSelects(); renderInventory();
+  saveToSheet();
+  toast(`✅ 分類「${old}」已改為「${newName}」`);
+}
+
+function deleteCategory(idx){
+  const cat=categories[idx];
+  if(items.some(i=>i.cat===cat)){toast(`⚠️「${cat}」還有食材，請先修改食材分類`);return;}
+  if(!confirm(`確定刪除分類「${cat}」？`))return;
+  categories.splice(idx,1);
+  renderCatList(); refreshCatSelects();
+  saveToSheet();
+  toast('🗑 已刪除分類：'+cat);
+}
+
+// ══ PERMISSIONS ═══════════════════════════════
+function updatePermission(key, value) {
+  staffPermissions[key] = value;
+  saveToSheet();
+  const label = {canStocktake:'員工盤點'}[key];
+  toast(value ? `✅ 已開放員工「${label}」權限` : `🔒 已關閉員工「${label}」權限`);
+}
+
+// ══ STOCKTAKE ═════════════════════════════════
+let stocktakeData={};
+
+function openStocktake(){
+  if(!isAdmin() && !staffPermissions.canStocktake){toast('⛔ 您沒有盤點權限，請聯絡管理員');return;}
+  stocktakeData={};
+  refreshCatSelects();
+  document.getElementById('st-catFilter').value='';
+  renderStocktake();
+  openModal('stocktake');
+}
+
+function renderStocktake(){
+  const cat=document.getElementById('st-catFilter').value;
+  const filtered=items.filter(i=>!cat||i.cat===cat);
+  document.getElementById('stocktakeGrid').innerHTML=filtered.map(item=>{
+    const cur=stocktakeData[item.id]!==undefined?stocktakeData[item.id]:'';
+    const diff=cur!==''?cur-item.qty:0;
+    const diffStr=cur!==''?(diff>0?`<span style="color:var(--ok)">+${diff}</span>`:diff<0?`<span style="color:var(--danger)">${diff}</span>`:`<span style="color:var(--text3)">±0</span>`):'';
+    return`<div class="st-row">
+      <div class="st-name"><div class="st-name-text">${item.name}</div><div class="st-cat">${item.cat}　現有：<span style="font-family:var(--mono)">${item.qty} ${item.unit}</span></div></div>
+      <input class="st-input" type="number" min="0" placeholder="${item.qty}" value="${cur}"
+        oninput="updateStocktake(${item.id},this.value)" id="st-${item.id}">
+      <div class="st-unit">${item.unit}</div>
+      <div class="st-diff">${diffStr}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateStocktake(id,val){
+  stocktakeData[id]=val===''?undefined:parseFloat(val);
+  const item=items.find(i=>i.id===id);
+  const diffEl=document.querySelector(`#st-${id}`).closest('.st-row').querySelector('.st-diff');
+  if(stocktakeData[id]===undefined||val===''){diffEl.innerHTML='';return;}
+  const diff=stocktakeData[id]-item.qty;
+  diffEl.innerHTML=diff>0?`<span style="color:var(--ok)">+${diff}</span>`:diff<0?`<span style="color:var(--danger)">${diff}</span>`:`<span style="color:var(--text3)">±0</span>`;
+}
+
+function saveStocktake(){
+  let count=0;
+  Object.entries(stocktakeData).forEach(([id,val])=>{
+    if(val===undefined||val===null)return;
+    const item=items.find(i=>i.id===parseInt(id));
+    if(item&&val>=0){item.qty=val;item.lastIn=today;count++;}
+  });
+  if(!count){toast('沒有輸入任何數量');closeModal('stocktake');return;}
+  closeModal('stocktake');
+  saveToSheet();
+  renderAll();
+  toast(`✅ 盤點完成！已更新 ${count} 項，正在同步…`);
+}
+
+// ══ ACTIONS ═══════════════════════════════════
+function addItem(){
+  if(!isAdmin())return;
+  const name=document.getElementById('f-name').value.trim();
+  const qty=parseFloat(document.getElementById('f-qty').value)||0;
+  const safe=parseFloat(document.getElementById('f-safe').value)||0;
+  const unit=document.getElementById('f-unit').value.trim()||'單位';
+  const cat=document.getElementById('f-cat').value;
+  if(!name){toast('請輸入食材名稱');return;}
+  items.push({id:nextId++,name,cat,qty,safe,unit,lastIn:today});
+  closeModal('addItem');
+  document.getElementById('f-name').value='';
+  document.getElementById('f-qty').value='';
+  document.getElementById('f-safe').value='';
+  document.getElementById('f-unit').value='';
+  saveToSheet(); renderAll();
+  toast('✅ 已新增食材：'+name);
+}
+
+function openEditQty(id){
+  const item=items.find(i=>i.id===id);
+  document.getElementById('editQtyInfo').innerHTML=`<strong>${item.name}</strong>　現有：<span style="color:var(--accent);font-family:var(--mono)">${item.qty} ${item.unit}</span>`;
+  document.getElementById('eq-id').value=id;
+  document.getElementById('eq-qty').value='';
+  document.getElementById('eq-note').value='';
+  openModal('editQty');
+}
+
+function saveQty(){
+  const id=parseInt(document.getElementById('eq-id').value);
+  const op=document.getElementById('eq-op').value;
+  const val=parseFloat(document.getElementById('eq-qty').value)||0;
+  const item=items.find(i=>i.id===id);
+  if(op==='set')item.qty=val;
+  else if(op==='add')item.qty=Math.max(0,item.qty+val);
+  else item.qty=Math.max(0,item.qty-val);
+  item.lastIn=today;
+  closeModal('editQty');
+  saveToSheet(); renderAll();
+  toast('✅ 庫存已更新，正在同步…');
+}
+
+function openEditSafe(id){
+  if(!isAdmin()){toast('⛔ 僅管理員可修改');return;}
+  const item=items.find(i=>i.id===id);
+  document.getElementById('editSafeInfo').innerHTML=`<strong>${item.name}</strong>　目前安全庫存：<span style="color:var(--accent);font-family:var(--mono)">${item.safe} ${item.unit}</span>`;
+  document.getElementById('es-id').value=id;
+  document.getElementById('es-safe').value=item.safe;
+  document.getElementById('es-unit').value=item.unit;
+  openModal('editSafe');
+}
+
+function saveSafe(){
+  const id=parseInt(document.getElementById('es-id').value);
+  const item=items.find(i=>i.id===id);
+  item.safe=parseFloat(document.getElementById('es-safe').value)||0;
+  item.unit=document.getElementById('es-unit').value.trim()||item.unit;
+  closeModal('editSafe');
+  saveToSheet(); renderAll();
+  toast('✅ 安全庫存已更新');
+}
+
+function quickOrder(id){
+  if(!isAdmin()){toast('⛔ 僅管理員可建立叫料單');return;}
+  const item=items.find(i=>i.id===id);
+  document.getElementById('ao-item').value=id;
+  document.getElementById('ao-qty').value=Math.max(1,item.safe-item.qty+2);
+  document.getElementById('ao-date').value=today;
+  openModal('addOrder');
+}
+
+function addOrder(){
+  if(!isAdmin())return;
+  const itemId=parseInt(document.getElementById('ao-item').value);
+  const item=items.find(i=>i.id===itemId);
+  const qty=parseFloat(document.getElementById('ao-qty').value)||0;
+  const supplier=document.getElementById('ao-supplier').value.trim();
+  const date=document.getElementById('ao-date').value||today;
+  const note=document.getElementById('ao-note').value.trim();
+  if(!item||!qty){toast('請填寫完整資訊');return;}
+  orders.push({id:nextOid++,itemId,itemName:item.name,qty,unit:item.unit,supplier,date,status:'pending',note});
+  closeModal('addOrder');
+  saveToSheet(); renderOrders();
+  toast('📋 叫料單已建立：'+item.name);
+}
+
+function advanceOrder(id){
+  const o=orders.find(x=>x.id===id);
+  const next={pending:'ordered',ordered:'received'};
+  if(!next[o.status])return;
+  o.status=next[o.status];
+  if(o.status==='received'){
+    const item=items.find(i=>i.id===o.itemId);
+    if(item){item.qty+=o.qty;item.lastIn=today;}
+    toast('✅ 到貨確認！庫存已自動更新，同步中…');
+  } else toast('📦 已標記為已下單，同步中…');
+  saveToSheet(); renderAll(); renderOrders();
+}
+
+function deleteItem(id){
+  if(!isAdmin()){toast('⛔ 僅管理員可刪除');return;}
+  if(!confirm('確定刪除此食材？'))return;
+  items=items.filter(i=>i.id!==id);
+  saveToSheet(); renderAll();
+  toast('🗑 已刪除食材');
+}
+
+function deleteOrder(id){
+  if(!isAdmin()){toast('⛔ 僅管理員可刪除');return;}
+  if(!confirm('確定刪除此叫料紀錄？'))return;
+  orders=orders.filter(o=>o.id!==id);
+  saveToSheet(); renderOrders();
+  toast('🗑 已刪除叫料紀錄');
+}
+
+function openChangePwd(role){
+  document.getElementById('cp-role').value=role;
+  document.getElementById('changePwdTarget').innerHTML=`修改對象：<strong>${role==='admin'?'👑 老闆／管理員':'👨‍🍳 員工'}</strong>`;
+  document.getElementById('cp-pwd').value='';
+  document.getElementById('cp-pwd2').value='';
+  openModal('changePwd');
+}
+
+function savePassword(){
+  const role=document.getElementById('cp-role').value;
+  const p1=document.getElementById('cp-pwd').value;
+  const p2=document.getElementById('cp-pwd2').value;
+  if(p1.length<4){toast('密碼至少需要 4 個字元');return;}
+  if(p1!==p2){toast('兩次輸入的密碼不一致');return;}
+  passwords[role]=p1;
+  closeModal('changePwd');
+  saveToSheet();
+  toast('🔑 密碼已更新並同步');
+}
+
+// ══ MODAL ═════════════════════════════════════
+function openModal(name){
+  if(name==='addOrder') document.getElementById('ao-item').innerHTML=items.map(i=>`<option value="${i.id}">${i.name}（${i.cat}）</option>`).join('');
+  if(name==='addItem') refreshCatSelects();
+  document.getElementById('modal-'+name).classList.add('open');
+}
+function closeModal(name){document.getElementById('modal-'+name).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');});
+});
+
+// ══ PAGE SWITCH ═══════════════════════════════
+function switchPage(name,el){
+  if(name==='admin'&&!isAdmin()){toast('⛔ 此頁面僅限管理員使用');return;}
+  switchPageById(name);
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+function switchPageById(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(name==='alerts')renderAlerts();
+  if(name==='orders')renderOrders();
+  if(name==='admin')renderAdminPage();
+}
+
+// ══ TOAST ═════════════════════════════════════
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// ══ RENDER ALL ════════════════════════════════
+function renderAll(){renderStats();renderInventory();refreshCatSelects();}
+
+// ══ AUTO REFRESH (每60秒自動重新整理) ══════════
+let autoRefreshTimer = null;
+function startAutoRefresh(){
+  autoRefreshTimer = setInterval(()=>{
+    if(currentRole) loadFromSheet();
+  }, 60000);
+}
+
+// ══ INIT ══════════════════════════════════════
+window.addEventListener('load', async ()=>{
+  // 先嘗試連線試算表
+  try {
+    const res = await fetch(GAS_URL + '?action=read');
+    const data = await res.json();
+    if (data.rows && data.rows.length > 1) {
+      parseSheetData(data.rows);
+    } else {
+      loadDefaultData();
+    }
+  } catch(e) {
+    loadDefaultData();
+  }
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  startAutoRefresh();
+});
+</script>
+</body>
+</html>
