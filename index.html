@@ -972,40 +972,57 @@ async function loadFromSheet() {
 }
 
 function parseSheetData(rows) {
+  // 完全重置
   storeData = {
-    hankou: { items: [], orders: [], nextId: 1, nextOid: 1 },
-    shuxiao: { items: [], orders: [], nextId: 10001, nextOid: 1 }
+    hankou:  { items: [], orders: [], nextId: 1,     nextOid: 1 },
+    shuxiao: { items: [], orders: [], nextId: 10001,  nextOid: 1 }
   };
-  let maxIds = { hankou: { item: 0, order: 0 }, shuxiao: { item: 0, order: 0 } };
+  let maxItemId = { hankou: 0, shuxiao: 0 };
+  let maxOrdId  = { hankou: 0, shuxiao: 0 };
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r[0]) continue;
-    const type = r[7] || 'item';
-    const store = r[10] || 'hankou'; // column 10 = store (note is r[9])
+    if (!r[0] && r[0] !== 0) continue;
+
+    const type  = String(r[7] || '');
+    const store = String(r[10] || '');
 
     if (type === 'item') {
-      const item = { id:parseInt(r[0]), name:r[1]||'', cat:r[2]||'', qty:parseFloat(r[3])||0,
-        safe:parseFloat(r[4])||0, unit:r[5]||'', lastIn:r[6]||today(), orderType:r[8]||'weekly', note:r[9]||'' };
-      if (storeData[store]) {
-        storeData[store].items.push(item);
-        if (item.id > maxIds[store].item) maxIds[store].item = item.id;
-      }
-    } else if (type === 'order') {
-      const order = { id:parseInt(r[0]), itemId:parseInt(r[1]), itemName:r[2]||'',
-        qty:parseFloat(r[3])||0, unit:r[4]||'', supplier:r[5]||'', date:r[6]||today(),
-        status: (r[7]||'order_pending').replace('order_',''), note:r[8]||'', orderType:r[9]||'weekly' };
-      // For orders, store is in a different position - we'll use itemName store prefix or separate col
-      // Re-map: col9 for items=store, for orders=orderType
-      const ostore = r[10] || 'hankou';
-      if (storeData[ostore]) {
-        storeData[ostore].orders.push(order);
-        if (order.id > maxIds[ostore].order) maxIds[ostore].order = order.id;
-      }
+      // 用 ID 判斷屬於哪間店：1-9999=漢口, 10000+=樹孝
+      const itemId = parseInt(r[0]);
+      const itemStore = store === 'shuxiao' ? 'shuxiao' : store === 'hankou' ? 'hankou' :
+                        (itemId >= 10000 ? 'shuxiao' : 'hankou');
+      const item = {
+        id: itemId,
+        name: r[1]||'', cat: r[2]||'',
+        qty: parseFloat(r[3])||0, safe: parseFloat(r[4])||0,
+        unit: r[5]||'', lastIn: r[6]||today(),
+        orderType: r[8]||'weekly', note: r[9]||''
+      };
+      storeData[itemStore].items.push(item);
+      if (itemId > maxItemId[itemStore]) maxItemId[itemStore] = itemId;
+
+    } else if (type.startsWith('order')) {
+      const ordId = parseInt(r[0]);
+      const ordStore = store === 'shuxiao' ? 'shuxiao' : 'hankou';
+      const order = {
+        id: ordId, itemId: parseInt(r[1]), itemName: r[2]||'',
+        qty: parseFloat(r[3])||0, unit: r[4]||'',
+        supplier: r[5]||'', date: r[6]||today(),
+        status: type.replace('order_','') || 'pending',
+        note: r[8]||'', orderType: r[9]||'weekly'
+      };
+      storeData[ordStore].orders.push(order);
+      if (ordId > maxOrdId[ordStore]) maxOrdId[ordStore] = ordId;
+
     } else if (type === 'cat') {
       try { categories = JSON.parse(r[1]); } catch(e) {}
     } else if (type === 'pwd') {
-      try { const p=JSON.parse(r[1]); if(p.admin) passwords.admin=p.admin; if(p.staffHankou) passwords.staffHankou=p.staffHankou; if(p.staffShuxiao) passwords.staffShuxiao=p.staffShuxiao; } catch(e) {}
+      try { const p=JSON.parse(r[1]);
+        if(p.admin) passwords.admin=p.admin;
+        if(p.staffHankou) passwords.staffHankou=p.staffHankou;
+        if(p.staffShuxiao) passwords.staffShuxiao=p.staffShuxiao;
+      } catch(e) {}
     } else if (type === 'perm') {
       try { staffPermissions = JSON.parse(r[1]); } catch(e) {}
     } else if (type === 'line') {
@@ -1014,11 +1031,12 @@ function parseSheetData(rows) {
       try { lineTemplate = {...lineTemplate, ...JSON.parse(r[1])}; } catch(e) {}
     }
   }
-  Object.keys(storeData).forEach(s => {
-    const minId = s === 'shuxiao' ? 10001 : 1;
-    storeData[s].nextId = Math.max(minId, maxIds[s].item + 1);
-    storeData[s].nextOid = maxIds[s].order + 1;
-  });
+
+  // 設定下一個 ID，確保不衝突
+  storeData.hankou.nextId  = Math.max(1,     maxItemId.hankou  + 1);
+  storeData.shuxiao.nextId = Math.max(10001, maxItemId.shuxiao + 1);
+  storeData.hankou.nextOid  = maxOrdId.hankou  + 1;
+  storeData.shuxiao.nextOid = maxOrdId.shuxiao + 1;
 }
 
 async function saveToSheet() {
