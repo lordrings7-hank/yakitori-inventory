@@ -1071,7 +1071,7 @@ async function saveToSheet() {
         rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'', o.orderType||'weekly', store]);
       });
     });
-    await fetch(GAS_URL, { method:'POST', body:JSON.stringify({action:'overwrite', rows}) });
+    await fetch(GAS_URL, { method:'POST', body:JSON.stringify({action:'write', rows}) });
     setSyncStatus('synced', '已儲存 ✓');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
