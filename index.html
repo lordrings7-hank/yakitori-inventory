@@ -954,7 +954,7 @@ function setSyncStatus(status, text) {
 async function loadFromSheet() {
   setSyncStatus('syncing', '同步中…');
   try {
-    const res = await fetch(GAS_URL + '?action=read', { mode: 'cors' });
+    const res = await fetch(GAS_URL + '?action=read');
     const data = await res.json();
     if (data.rows && data.rows.length > 1) {
       parseSheetData(data.rows);
@@ -1073,10 +1073,10 @@ async function saveToSheet() {
     });
     const res = await fetch(GAS_URL, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({action:'write', rows})
     });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     setSyncStatus('synced', '已儲存 ✓');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
