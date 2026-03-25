@@ -203,6 +203,13 @@ td.name{font-weight:500;}td.mono{font-family:var(--mono);font-size:.8rem;}
 .sst-num{width:64px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 6px;color:var(--text);font-size:1rem;font-family:var(--mono);outline:none;text-align:center;}
 .sst-num:focus{border-color:var(--accent);}
 .sst-unit{font-size:.75rem;color:var(--text3);min-width:22px;}
+
+/* ── 盤點說明 ── */
+.sst-rule{font-size:.72rem;color:var(--warn);margin-top:4px;padding:3px 7px;background:rgba(232,197,58,.08);border-left:2px solid var(--warn);border-radius:0 4px 4px 0;line-height:1.4;display:none;}
+.sst-rule.show{display:block;}
+.sst-rule-btn{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text3);font-size:.75rem;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--sans);}
+.sst-rule-btn.has-rule{border-color:var(--warn);color:var(--warn);}
+
 .sst-diff{font-size:.75rem;font-family:var(--mono);min-width:40px;text-align:right;}
 .sst-progress{background:var(--surface);border-top:1px solid var(--border);padding:.8rem 1.2rem;position:sticky;bottom:0;display:flex;align-items:center;gap:10px;}
 .sst-progress-bar{flex:1;height:6px;background:var(--border);border-radius:4px;overflow:hidden;}
@@ -376,6 +383,23 @@ header{padding:0 .8rem;}
 <div class="confirm-store-btns">
 <button class="confirm-yes hankou" id="confirmYesBtn" onclick="confirmStoreYes()">✅ 對！進入盤點</button>
 <button class="confirm-no" onclick="confirmStoreNo()">❌ 選錯了，返回</button>
+</div>
+</div>
+</div>
+
+
+<!-- 盤點完成確認對話框 -->
+<div id="stocktakeDoneOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:500;align-items:center;justify-content:center;padding:1rem;">
+<div style="background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:2rem 1.6rem;width:90%;max-width:360px;text-align:center;">
+<div style="font-size:3rem;margin-bottom:.8rem;">📋</div>
+<div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:.4rem;">盤點已完成</div>
+<div style="font-size:.85rem;color:var(--text2);margin-bottom:.3rem;" id="doneCountText">已更新 0 項數量</div>
+<div style="font-size:.82rem;color:var(--text3);margin-bottom:1.6rem;" id="doneStoreText">漢口店　盤點人員確認</div>
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.9rem;margin-bottom:1.4rem;text-align:left;" id="doneItemList"></div>
+<div style="font-size:.9rem;font-weight:600;color:var(--text);margin-bottom:1rem;">請確認以上數量無誤？</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+<button onclick="confirmDoneYes()" style="padding:13px;background:var(--ok);color:#000;border:none;border-radius:10px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:var(--sans);">✅ 確認沒問題</button>
+<button onclick="confirmDoneNo()" style="padding:13px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:10px;font-size:.9rem;cursor:pointer;font-family:var(--sans);">✏️ 返回修改</button>
 </div>
 </div>
 </div>
@@ -561,6 +585,10 @@ header{padding:0 .8rem;}
 <option value="both">兩者都是</option>
 <option value="none">不自動叫料</option>
 </select>
+</div>
+<div class="fr">
+<label class="fl">📋 盤點說明（員工盤點時顯示）</label>
+<input class="fi" id="es-note" placeholder="例：完整一包才算，已用過不算">
 </div>
 <input type="hidden" id="es-id">
 <div class="modal-footer">
@@ -834,11 +862,11 @@ function parseSheetData(rows) {
     const r = rows[i];
     if (!r[0]) continue;
     const type = r[7] || 'item';
-    const store = r[9] || 'hankou'; // column 9 = store
+    const store = r[10] || 'hankou'; // column 10 = store (note is r[9])
 
     if (type === 'item') {
       const item = { id:parseInt(r[0]), name:r[1]||'', cat:r[2]||'', qty:parseFloat(r[3])||0,
-        safe:parseFloat(r[4])||0, unit:r[5]||'', lastIn:r[6]||today(), orderType:r[8]||'weekly' };
+        safe:parseFloat(r[4])||0, unit:r[5]||'', lastIn:r[6]||today(), orderType:r[8]||'weekly', note:r[9]||'' };
       if (storeData[store]) {
         storeData[store].items.push(item);
         if (item.id > maxIds[store].item) maxIds[store].item = item.id;
@@ -880,7 +908,7 @@ async function saveToSheet() {
     rows.push(['0', JSON.stringify(lineNotifyToken), '', '', '', '', today(), 'line']);
     Object.keys(storeData).forEach(store => {
       storeData[store].items.forEach(item => {
-        rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item', item.orderType||'weekly', store]);
+        rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item', item.orderType||'weekly', item.note||'', store]);
       });
       storeData[store].orders.forEach(o => {
         rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'', o.orderType||'weekly', store]);
@@ -895,27 +923,61 @@ async function saveToSheet() {
 }
 
 function loadDefaultData() {
-  categories = ['肉類','海鮮','蔬菜','醬料','耗材'];
-  const base = [
-    {id:1,name:'雞腿肉',cat:'肉類',qty:12,safe:10,unit:'kg',orderType:'weekly'},
-    {id:2,name:'雞胸肉',cat:'肉類',qty:8,safe:8,unit:'kg',orderType:'weekly'},
-    {id:3,name:'豬五花',cat:'肉類',qty:3,safe:8,unit:'kg',orderType:'weekly'},
-    {id:4,name:'牛舌',cat:'肉類',qty:5,safe:4,unit:'kg',orderType:'weekly'},
-    {id:5,name:'雞心',cat:'肉類',qty:2,safe:5,unit:'kg',orderType:'weekly'},
-    {id:6,name:'蝦子',cat:'海鮮',qty:6,safe:4,unit:'kg',orderType:'weekly'},
-    {id:7,name:'透抽',cat:'海鮮',qty:1,safe:3,unit:'kg',orderType:'weekly'},
-    {id:8,name:'玉米筍',cat:'蔬菜',qty:20,safe:10,unit:'包',orderType:'daily'},
-    {id:9,name:'青椒',cat:'蔬菜',qty:4,safe:5,unit:'kg',orderType:'daily'},
-    {id:10,name:'蔥段',cat:'蔬菜',qty:3,safe:6,unit:'kg',orderType:'daily'},
-    {id:11,name:'鹽麴醬',cat:'醬料',qty:2,safe:3,unit:'瓶',orderType:'weekly'},
-    {id:12,name:'味醂',cat:'醬料',qty:5,safe:3,unit:'瓶',orderType:'weekly'},
-    {id:13,name:'串燒竹籤',cat:'耗材',qty:800,safe:500,unit:'支',orderType:'weekly'},
-    {id:14,name:'炭火',cat:'耗材',qty:2,safe:4,unit:'袋',orderType:'weekly'},
-    {id:15,name:'錫箔紙',cat:'耗材',qty:6,safe:4,unit:'卷',orderType:'weekly'},
+  categories = ['肉類','海鮮','蔬菜','醬醬烤','炸物飲品','耗材'];
+
+  // ── 樹孝店品項（依菜單）──
+  const shuxiaoItems = [
+    // 嚴選肉串
+    {id:1, name:'極品牛肋條串', note:'完整一包才算，已拆開使用中不算',    cat:'肉類',   qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:2, name:'醬燒牛嫩肩串', note:'完整一包才算，已拆開使用中不算',    cat:'肉類',   qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:3, name:'特選牛肉串', note:'完整一包才算，已拆開使用中不算',       cat:'肉類',   qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:4, name:'招牌羊肉串', note:'完整一包才算，已拆開使用中不算',       cat:'肉類',   qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:5, name:'醬烤豬五花串', note:'完整一包才算，已拆開使用中不算',     cat:'肉類',   qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:6, name:'無骨雞腿排串', note:'完整一包才算，已拆開使用中不算',     cat:'肉類',   qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:7, name:'香酥雞屁股串', note:'完整一包才算，已拆開使用中不算',     cat:'肉類',   qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:8, name:'香烤雞軟骨', note:'完整一包才算，已拆開使用中不算',       cat:'肉類',   qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:9, name:'酥烤雞皮串', note:'完整一包才算，已拆開使用中不算',       cat:'肉類',   qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:10,name:'醬燒雞心串', note:'完整一包才算，已拆開使用中不算',       cat:'肉類',   qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    // 海味鮮烤
+    {id:11,name:'深海魷魚串', note:'整包計算，已開封使用中的不算',       cat:'海鮮',   qty:0, safe:5,  unit:'串', orderType:'weekly'},
+    {id:12,name:'白蝦串（12隻/份）', note:'整份計算，散裝的以單隻欄位登記',cat:'海鮮',   qty:0, safe:5,  unit:'份', orderType:'daily'},
+    {id:13,name:'白蝦串單隻', note:'計算總隻數，包含已開封的',       cat:'海鮮',   qty:0, safe:20, unit:'隻', orderType:'daily'},
+    // 經典醬烤
+    {id:14,name:'獨門豆皮串',       cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:15,name:'手工米腸串',       cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:16,name:'德式香腸串',       cat:'醬醬烤', qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:17,name:'酥脆甜不辣串',     cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:18,name:'鮮脆花枝丸',       cat:'醬醬烤', qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:19,name:'百頁豆腐串',       cat:'醬醬烤', qty:0, safe:8,  unit:'串', orderType:'weekly'},
+    {id:20,name:'醬烤米血串',       cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:21,name:'醬燒豆干串',       cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    {id:22,name:'基隆黑輪串',       cat:'醬醬烤', qty:0, safe:10, unit:'串', orderType:'weekly'},
+    // 清爽時蔬
+    {id:23,name:'多汁櫛瓜串',       cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    {id:24,name:'鮮香菇串',         cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    {id:25,name:'脆感筊白筍串',     cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    {id:26,name:'青椒串',           cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    {id:27,name:'爆汁杏鮑菇串',     cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    {id:28,name:'茄子串',           cat:'蔬菜',   qty:0, safe:8,  unit:'串', orderType:'daily'},
+    // 炸物飲品
+    {id:29,name:'日式唐揚雞',       cat:'炸物飲品',qty:0,safe:5,  unit:'份', orderType:'weekly'},
+    {id:30,name:'黃金脆薯條',       cat:'炸物飲品',qty:0,safe:5,  unit:'份', orderType:'weekly'},
+    {id:31,name:'各式冷飲', note:'以「瓶」計算，冰箱內全部數量',         cat:'炸物飲品',qty:0,safe:10, unit:'瓶', orderType:'weekly'},
+    {id:32,name:'精選啤酒', note:'以「瓶」計算，冰箱內全部數量',         cat:'炸物飲品',qty:0,safe:10, unit:'瓶', orderType:'weekly'},
+    // 耗材
+    {id:33,name:'串燒竹籤', note:'以「支」計算，數清楚再填',         cat:'耗材',   qty:0, safe:500,unit:'支', orderType:'weekly'},
+    {id:34,name:'炭火', note:'整袋計算，已開封使用中的不算',             cat:'耗材',   qty:0, safe:4,  unit:'袋', orderType:'weekly'},
+    {id:35,name:'錫箔紙', note:'整卷計算，已開封使用中的不算',           cat:'耗材',   qty:0, safe:4,  unit:'卷', orderType:'weekly'},
+    {id:36,name:'外帶袋', note:'清點整疊數量',           cat:'耗材',   qty:0, safe:100,unit:'個', orderType:'weekly'},
+    {id:37,name:'醬料包', note:'清點整包數量',           cat:'耗材',   qty:0, safe:50, unit:'包', orderType:'weekly'},
   ].map(i=>({...i, lastIn:today()}));
-  storeData.hankou.items = base.map(i=>({...i}));
-  storeData.shuxiao.items = base.map(i=>({...i}));
-  storeData.hankou.nextId = storeData.shuxiao.nextId = 16;
+
+  // ── 漢口店品項（暫用相同基礎，GM可自行調整）──
+  const hankouItems = shuxiaoItems.map(i=>({...i}));
+
+  storeData.shuxiao.items = shuxiaoItems;
+  storeData.hankou.items  = hankouItems;
+  storeData.shuxiao.nextId = storeData.hankou.nextId = 38;
 }
 
 // ══ HELPERS ═══════════════════════════════════
@@ -1382,9 +1444,14 @@ function renderSstGrid() {
       (diff > 0 ? `<span style="color:var(--ok)">+${diff}</span>` :
        diff < 0 ? `<span style="color:var(--danger)">${diff}</span>` :
        `<span style="color:var(--text3)">±0</span>`) : '';
+    const hasRule = !!(item.note && item.note.trim());
     return `<div class="sst-card${isFilled?' filled':''}" id="sstcard-${item.id}">
       <div class="sst-info">
-        <div class="sst-name">${item.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="sst-name">${item.name}</div>
+          ${hasRule ? `<button class="sst-rule-btn has-rule" onclick="toggleRule(${item.id})" title="盤點說明">？</button>` : ''}
+        </div>
+        <div class="sst-rule" id="sstrule-${item.id}">${item.note||''}</div>
         <div class="sst-cur"><span class="badge badge-cat" style="font-size:.62rem;">${item.cat}</span>　現有：<strong style="font-family:var(--mono)">${item.qty} ${item.unit}</strong></div>
       </div>
       <div class="sst-controls">
@@ -1399,6 +1466,11 @@ function renderSstGrid() {
       <div class="sst-diff" id="sstdiff-${item.id}">${diffHtml}</div>
     </div>`;
   }).join('');
+}
+
+function toggleRule(id) {
+  const el = document.getElementById('sstrule-'+id);
+  if(el) el.classList.toggle('show');
 }
 
 function sstUpdate(id, val) {
@@ -1431,17 +1503,51 @@ function sstAdjust(id, delta) {
 }
 
 function saveStocktakeStaff() {
+  // 先統計，顯示確認對話框
+  const entries = Object.entries(sstData).filter(([id, val]) => val !== undefined && val !== null && val >= 0);
+  if(!entries.length){ toast('沒有輸入任何數量'); return; }
+
+  // 建立摘要清單
+  let listHtml = '';
   let count = 0;
+  entries.forEach(([id, val]) => {
+    const item = getItems().find(i=>i.id===parseInt(id));
+    if(!item) return;
+    const diff = val - item.qty;
+    const diffStr = diff > 0 ? `<span style="color:var(--ok)">+${diff}</span>` :
+                    diff < 0 ? `<span style="color:var(--danger)">${diff}</span>` :
+                    `<span style="color:var(--text3)">±0</span>`;
+    listHtml += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.82rem;">
+      <span>${item.name}</span>
+      <span style="font-family:var(--mono)">${val} ${item.unit} ${diffStr}</span>
+    </div>`;
+    count++;
+  });
+
+  document.getElementById('doneCountText').textContent = `已更新 ${count} 項數量`;
+  document.getElementById('doneStoreText').textContent = `${STORE_NAMES[currentStore]}　盤點確認`;
+  document.getElementById('doneItemList').innerHTML = listHtml;
+  document.getElementById('stocktakeDoneOverlay').style.display = 'flex';
+}
+
+function confirmDoneYes() {
+  // 真正儲存
   const t = today();
+  let count = 0;
   Object.entries(sstData).forEach(([id, val]) => {
     if(val === undefined || val === null) return;
     const item = getItems().find(i=>i.id===parseInt(id));
     if(item && val >= 0) { item.qty = val; item.lastIn = t; count++; }
   });
-  if(!count){ toast('沒有輸入任何數量'); return; }
+  document.getElementById('stocktakeDoneOverlay').style.display = 'none';
   saveToSheet();
-  toast(`✅ 盤點完成！已更新 ${count} 項`);
-  setTimeout(() => closeStaffStocktake(), 1200);
+  toast(`✅ 盤點完成！已儲存 ${count} 項`);
+  setTimeout(() => closeStaffStocktake(), 1000);
+}
+
+function confirmDoneNo() {
+  // 返回繼續修改
+  document.getElementById('stocktakeDoneOverlay').style.display = 'none';
 }
 
 // ══ ADMIN STOCKTAKE ═══════════════════════════
@@ -1557,6 +1663,7 @@ function openEditSafe(id){
   document.getElementById('es-safe').value=item.safe;
   document.getElementById('es-unit').value=item.unit;
   document.getElementById('es-ordertype').value=item.orderType||'weekly';
+  document.getElementById('es-note').value=item.note||'';
   openModal('editSafe');
 }
 function saveSafe(){
@@ -1565,6 +1672,7 @@ function saveSafe(){
   item.safe=parseFloat(document.getElementById('es-safe').value)||0;
   item.unit=document.getElementById('es-unit').value.trim()||item.unit;
   item.orderType=document.getElementById('es-ordertype').value;
+  item.note=document.getElementById('es-note').value.trim();
   closeModal('editSafe');
   saveToSheet();renderAll();
   toast('✅ 安全庫存已更新');
