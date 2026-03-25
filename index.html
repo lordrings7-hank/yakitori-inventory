@@ -71,9 +71,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .hankou-btn{background:#e84a3a;color:#fff;}
 .shuxiao-btn{background:#4ab8e8;color:#fff;}
 
+
+/* ── 店別切換列 ── */
+#storeSwitcherBar{display:flex;}
+
 /* ── LOGIN ── */
 #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 60% 40%,#2a1a0a 0%,var(--bg) 70%);}
-.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;width:90%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem 1.5rem;width:95%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
 .login-logo{text-align:center;margin-bottom:1.8rem;}
 .login-logo .icon{font-size:2.5rem;display:block;margin-bottom:8px;}
 .login-logo .title{font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.05em;}
@@ -90,7 +94,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .store-tab.active{border-color:#4ab8e8;color:#4ab8e8;background:rgba(74,184,232,.08);}
 .store-tab .store-icon{font-size:1.2rem;display:block;margin-bottom:3px;}
 .store-label{font-size:.65rem;color:var(--text3);margin-bottom:.4rem;letter-spacing:.06em;}
-.login-btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--sans);margin-top:.5rem;transition:background .15s;}
+.login-btn{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;font-family:var(--sans);margin-top:.5rem;transition:background .15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .login-btn:hover{background:var(--accent2);}
 .login-error{color:var(--danger);font-size:.78rem;text-align:center;margin-top:10px;min-height:18px;}
 .login-hint{font-size:.72rem;color:var(--text3);margin-top:4px;}
@@ -198,7 +202,7 @@ td.name{font-weight:500;}td.mono{font-family:var(--mono);font-size:.8rem;}
 .sst-name{font-size:1rem;font-weight:600;}
 .sst-cur{font-size:.78rem;color:var(--text3);margin-top:3px;}
 .sst-controls{display:flex;align-items:center;gap:8px;}
-.sst-btn{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--sans);}
+.sst-btn{width:40px;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--sans);touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .sst-btn:active{background:var(--accent);color:#fff;border-color:var(--accent);}
 .sst-num{width:64px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 6px;color:var(--text);font-size:1rem;font-family:var(--mono);outline:none;text-align:center;}
 .sst-num:focus{border-color:var(--accent);}
@@ -283,14 +287,93 @@ td.name{font-weight:500;}td.mono{font-family:var(--mono);font-size:.8rem;}
 .ofilter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 .ofilter-btn.daily.active{background:var(--ok);color:#000;border-color:var(--ok);}
 
+/* ══ 手機全面優化 ══ */
 @media(max-width:640px){
-.stats{grid-template-columns:repeat(2,1fr);}
-main{padding:.8rem;}
-header{padding:0 .8rem;}
+
+/* 整體排版 */
+main{padding:.6rem;}
+header{padding:0 .7rem;height:52px;}
+.header-right{gap:4px;}
 .admin-grid{grid-template-columns:1fr;}
 .fr2{grid-template-columns:1fr;}
 .header-right .sync-status{display:none;}
+
+/* 統計卡片：2欄 */
+.stats{grid-template-columns:repeat(2,1fr);gap:.5rem;margin-bottom:1rem;}
+.stat-card{padding:.7rem .9rem;}
+.stat-value{font-size:1.3rem;}
+.stat-label{font-size:.65rem;}
+
+/* Header：Logo 縮小，按鈕精簡 */
+.logo-text{font-size:.82rem;}
+.logo-sub{display:none;}
+.store-badge{font-size:.62rem;padding:2px 6px;}
+.user-badge{display:none;}
+.btn-sm{padding:5px 10px;font-size:.72rem;}
+
+/* 店別切換按鈕 */
+#storeSwitcher{gap:3px;}
+.store-switch-btn{padding:5px 9px;font-size:.7rem;}
+
+/* 庫存表格 → 正常顯示，允許橫滑 */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{min-width:520px;}
+
+/* 工具列 */
+.toolbar{gap:6px;}
+.search-box{font-size:.8rem;padding:7px 10px;}
+select.filter{font-size:.75rem;padding:6px 8px;}
+
+/* 叫料卡片 */
+.order-card{padding:.75rem .9rem;gap:.6rem;}
+.order-name{font-size:.85rem;}
+.order-detail{font-size:.68rem;}
+
+/* Tab */
+.tabs{padding:0 .5rem;}
+.tab{padding:10px 12px;font-size:.76rem;}
+.admin-tag{display:none;}
+
+/* Modal 全寬 */
+.modal{padding:1.2rem;border-radius:12px 12px 0 0;max-width:100%;margin:0;position:fixed;bottom:0;left:0;right:0;max-height:92vh;}
+.overlay{align-items:flex-end;padding:0;}
+.modal-title{font-size:.95rem;}
+
+/* 盤點卡片 */
+.sst-card{padding:.75rem .9rem;gap:10px;border-radius:10px;}
+.sst-name{font-size:.95rem;}
+.sst-num{width:58px;font-size:.95rem;padding:7px 5px;}
+.sst-btn{width:34px;height:34px;font-size:1rem;}
+.sst-body{padding:.7rem;}
+.sst-progress{padding:.6rem 1rem;gap:8px;}
+
+/* 確認對話框 */
+.confirm-store-box{padding:1.5rem 1.2rem;}
+.confirm-store-name{font-size:1.5rem;}
+.confirm-yes,.confirm-no{padding:14px;font-size:.9rem;}
+
+/* 雙店登入卡片 */
+.staff-dual-card{padding:.9rem;}
+.sdc-btn{padding:11px;}
+
+/* 跨店管理表格 */
+#comparePageContent .table-wrap{overflow-x:auto;}
 }
+
+/* 小螢幕額外處理 */
+@media(max-width:380px){
+.tab{padding:9px 9px;font-size:.7rem;}
+.sst-btn{width:30px;height:30px;}
+.sst-num{width:52px;}
+.stat-value{font-size:1.1rem;}
+}
+
+@media(max-width:480px){
+.btn-text-full{display:none !important;}
+.btn-text-short{display:inline !important;}
+.btn-sm{padding:5px 8px;}
+}
+
 </style>
 </head>
 <body>
@@ -443,18 +526,19 @@ header{padding:0 .8rem;}
 <div class="sync-status"><div class="sync-dot" id="syncDot"></div><span id="syncText">同步中…</span></div>
 <div class="user-badge"><div class="role-dot" id="headerDot"></div><span id="headerUserName"></span></div>
 <div id="headerAdminBtns" style="display:flex;gap:6px;align-items:center;">
-<div id="storeSwitcher" style="display:flex;gap:4px;">
-<button class="store-switch-btn active" id="storeBtn-hankou" onclick="switchStore('hankou')">🏪 漢口</button>
-<button class="store-switch-btn" id="storeBtn-shuxiao" onclick="switchStore('shuxiao')">🏬 樹孝</button>
-</div>
-<button class="btn btn-warn btn-sm" onclick="openAdminStocktake()">📋 盤點</button>
-<button class="btn btn-ghost btn-sm" onclick="openModal('addItem')">＋ 新增</button>
-<button class="btn btn-primary btn-sm" onclick="openModal('addOrder')">🛒 叫料</button>
+<button class="btn btn-warn btn-sm" onclick="openAdminStocktake()" title="盤點">📋</button>
+<button class="btn btn-ghost btn-sm" onclick="openModal('addItem')" title="新增品項">＋</button>
+<button class="btn btn-primary btn-sm" onclick="openModal('addOrder')" title="叫料">🛒</button>
 </div>
 <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
 </div>
 </header>
 
+<div id="storeSwitcherBar" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:6px 1rem;gap:8px;align-items:center;">
+<span style="font-size:.72rem;color:var(--text3);">門市：</span>
+<button class="store-switch-btn active" id="storeBtn-hankou" onclick="switchStore('hankou')">🏪 漢口店</button>
+<button class="store-switch-btn" id="storeBtn-shuxiao" onclick="switchStore('shuxiao')">🏬 樹孝店</button>
+</div>
 <div class="tabs" id="mainTabs">
 <div class="tab active" onclick="switchPage('inventory',this)">📦 庫存</div>
 <div class="tab" onclick="switchPage('alerts',this)">🔔 補貨提醒</div>
@@ -798,6 +882,8 @@ function applyRoleUI() {
   document.getElementById('headerAdminBtns').style.display = isAdmin() ? 'flex' : 'none';
   document.getElementById('tabAdmin').style.display = isAdmin() ? 'block' : 'none';
   document.getElementById('tabCompare').style.display = isAdmin() ? 'block' : 'none';
+  const ssBar = document.getElementById('storeSwitcherBar');
+  if(ssBar) ssBar.style.display = isAdmin() ? 'flex' : 'none';
   document.getElementById('headerStoreBadge').textContent = STORE_NAMES[currentStore];
   // 更新店別按鈕狀態
   ['hankou','shuxiao'].forEach(s => {
@@ -812,6 +898,9 @@ function switchStore(store) {
     const btn = document.getElementById('storeBtn-'+s);
     if(btn) btn.classList.toggle('active', s===store);
   });
+  // also update applyRoleUI store badge
+  const badge = document.getElementById('headerStoreBadge');
+  if(badge) badge.textContent = STORE_NAMES[store];
   document.getElementById('headerStoreBadge').textContent = STORE_NAMES[store];
   renderAll();
   const alertPage = document.getElementById('page-alerts');
