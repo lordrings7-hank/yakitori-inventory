@@ -1073,10 +1073,8 @@ async function saveToSheet() {
     });
     const res = await fetch(GAS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({action:'write', rows})
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
     setSyncStatus('synced', '已儲存 ✓');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
