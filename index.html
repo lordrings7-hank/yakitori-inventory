@@ -315,9 +315,12 @@ header{padding:0 .7rem;height:52px;}
 #storeSwitcher{gap:3px;}
 .store-switch-btn{padding:5px 9px;font-size:.7rem;}
 
-/* 庫存表格 → 正常顯示，允許橫滑 */
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-table{min-width:520px;}
+/* 手機：table-wrap 卡片模式 */
+.table-wrap{border:none;background:transparent;box-shadow:none;overflow:visible;}
+table{width:100%;min-width:unset;}
+thead{display:none;}
+tbody tr{background:transparent;border:none;}
+tbody tr td{padding:0;border:none;width:100%;}
 
 /* 工具列 */
 .toolbar{gap:6px;}
@@ -373,6 +376,18 @@ select.filter{font-size:.75rem;padding:6px 8px;}
 .btn-text-short{display:inline !important;}
 .btn-sm{padding:5px 8px;}
 }
+
+
+/* ── 手機庫存卡片 ── */
+.inv-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;box-sizing:border-box;width:100%;}
+.inv-card-danger{border-left:3px solid var(--danger);}
+.inv-card-warn{border-left:3px solid var(--warn);}
+.inv-card-ok{border-left:3px solid var(--ok);}
+.inv-card-row1{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:.35rem;}
+.inv-card-name{font-size:.95rem;font-weight:700;line-height:1.3;word-break:break-all;}
+.inv-card-row2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:.35rem;}
+.inv-card-row3{font-size:.85rem;color:var(--text2);margin-bottom:.2rem;}
+.inv-card-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:.4rem;}
 
 </style>
 </head>
@@ -1101,29 +1116,66 @@ function renderInventory() {
   const sf=document.getElementById('statusFilter').value;
   const filtered=getItems().filter(i=>(!search||i.name.includes(search))&&(!cat||i.cat===cat)&&(!sf||getStatus(i)===sf));
   const body=document.getElementById('inventoryBody');
+  const isMobile = window.innerWidth <= 640;
   if(!filtered.length){body.innerHTML='<tr><td colspan="7"><div class="empty">找不到符合的食材</div></td></tr>';return;}
   const otLabel={weekly:'📅週日',daily:'🥬每日',both:'兩者',none:'—'};
-  body.innerHTML=filtered.map(item=>{
-    const s=getStatus(item), pct=Math.min(100,Math.round(item.qty/item.safe*100));
-    const cls={ok:'fill-ok',warn:'fill-warn',danger:'fill-danger'}[s];
-    let actions=`<button class="btn btn-ghost btn-sm" onclick="openEditQty(${item.id})">調整</button>`;
-    if(isAdmin()) actions+=`
-      <button class="btn btn-ghost btn-sm" onclick="openEditSafe(${item.id})">安全庫存</button>
-      <button class="btn btn-ghost btn-sm" onclick="quickOrder(${item.id})">叫料</button>
-      <button class="btn-del" onclick="deleteItem(${item.id})">刪除</button>`;
-    const ot = item.orderType||'weekly';
-    const otBadge = ot==='daily' ? `<span class="badge badge-veg" style="margin-left:4px;font-size:.62rem;">${otLabel[ot]}</span>` :
-      ot==='weekly' ? `<span class="badge badge-cat" style="margin-left:4px;font-size:.62rem;">${otLabel[ot]}</span>` : '';
-    return`<tr>
-      <td class="name">${item.name}${otBadge}</td>
-      <td><span class="badge badge-cat">${item.cat}</span></td>
-      <td class="mono">${item.qty} ${item.unit}</td>
-      <td class="mono">${isAdmin()?item.safe+' '+item.unit:'<span style="color:var(--text3)">—</span>'}</td>
-      <td><div class="stock-bar-wrap"><div class="stock-bar"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div><span class="badge badge-${s}">${statusLabel(s)}</span></div></td>
-      <td class="mono" style="color:var(--text3);font-size:.73rem;">${item.lastIn}</td>
-      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actions}</div></td>
-    </tr>`;
-  }).join('');
+  if(isMobile){
+    // 手機：卡片模式，直接塞在 tbody 裡
+    body.innerHTML = filtered.map(item=>{
+      const s=getStatus(item), pct=Math.min(100,Math.round(item.qty/item.safe*100));
+      const cls={ok:'fill-ok',warn:'fill-warn',danger:'fill-danger'}[s];
+      const ot=item.orderType||'weekly';
+      const otBadge=ot==='daily'?`<span class="badge badge-veg" style="font-size:.62rem;margin-left:4px;">🥬每日</span>`:
+        ot==='weekly'?`<span class="badge badge-cat" style="font-size:.62rem;margin-left:4px;">📅週日</span>`:'';
+      let actionBtns=`<button class="btn btn-ghost btn-sm" onclick="openEditQty(${item.id})">調整數量</button>`;
+      if(isAdmin()) actionBtns+=`
+        <button class="btn btn-ghost btn-sm" onclick="openEditSafe(${item.id})">編輯</button>
+        <button class="btn btn-primary btn-sm" onclick="quickOrder(${item.id})">叫料</button>
+        <button class="btn-del" onclick="deleteItem(${item.id})">刪除</button>`;
+      return `<tr><td colspan="7" style="padding:0 0 .5rem 0;border:none;">
+        <div class="inv-card inv-card-${s}">
+          <div class="inv-card-row1">
+            <div class="inv-card-name">${item.name}</div>
+            <span class="badge badge-${s}" style="flex-shrink:0;">${statusLabel(s)}</span>
+          </div>
+          <div class="inv-card-row2">
+            <span class="badge badge-cat" style="flex-shrink:0;">${item.cat}</span>
+            ${otBadge}
+            <span style="font-size:.78rem;color:var(--text3);margin-left:auto;">${item.lastIn}</span>
+          </div>
+          <div class="inv-card-row3">
+            <span style="font-family:var(--mono);font-size:.95rem;">現有 <strong style="color:var(--text);">${item.qty}</strong> ${item.unit}</span>
+            ${isAdmin()?`<span style="font-size:.78rem;color:var(--text3);">／安全庫存 ${item.safe} ${item.unit}</span>`:''}
+          </div>
+          <div class="stock-bar" style="margin:.4rem 0;"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div>
+          <div class="inv-card-actions">${actionBtns}</div>
+        </div>
+      </td></tr>`;
+    }).join('');
+  } else {
+    // 桌機：原表格
+    body.innerHTML=filtered.map(item=>{
+      const s=getStatus(item), pct=Math.min(100,Math.round(item.qty/item.safe*100));
+      const cls={ok:'fill-ok',warn:'fill-warn',danger:'fill-danger'}[s];
+      let actions=`<button class="btn btn-ghost btn-sm" onclick="openEditQty(${item.id})">調整</button>`;
+      if(isAdmin()) actions+=`
+        <button class="btn btn-ghost btn-sm" onclick="openEditSafe(${item.id})">編輯</button>
+        <button class="btn btn-ghost btn-sm" onclick="quickOrder(${item.id})">叫料</button>
+        <button class="btn-del" onclick="deleteItem(${item.id})">刪除</button>`;
+      const ot=item.orderType||'weekly';
+      const otBadge=ot==='daily'?`<span class="badge badge-veg" style="margin-left:4px;font-size:.62rem;">🥬每日</span>`:
+        ot==='weekly'?`<span class="badge badge-cat" style="margin-left:4px;font-size:.62rem;">📅週日</span>`:'';
+      return`<tr>
+        <td class="name">${item.name}${otBadge}</td>
+        <td><span class="badge badge-cat">${item.cat}</span></td>
+        <td class="mono">${item.qty} ${item.unit}</td>
+        <td class="mono">${isAdmin()?item.safe+' '+item.unit:'<span style="color:var(--text3)">—</span>'}</td>
+        <td><div class="stock-bar-wrap"><div class="stock-bar"><div class="stock-bar-fill ${cls}" style="width:${pct}%"></div></div><span class="badge badge-${s}">${statusLabel(s)}</span></div></td>
+        <td class="mono" style="color:var(--text3);font-size:.73rem;">${item.lastIn}</td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${actions}</div></td>
+      </tr>`;
+    }).join('');
+  }
 }
 
 // ══ RENDER ALERTS ═════════════════════════════
@@ -2013,6 +2065,9 @@ function renderAll(){renderStats();renderInventory();refreshCatSelects();}
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
 })();
+
+// re-render on resize for mobile/desktop switch
+window.addEventListener('resize', () => { if(currentRole==='admin') renderInventory(); });
 
 // auto refresh every 60s
 setInterval(()=>{ if(currentRole==='admin') loadFromSheet(); }, 60000);
