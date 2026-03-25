@@ -1251,8 +1251,79 @@ function renderAdminPage() {
           </label>
         </div>
       </div>
+      <div class="admin-card" style="grid-column:1/-1;border:1px solid rgba(232,197,58,.3);background:rgba(232,197,58,.04);">
+        <div class="admin-card-title" style="color:var(--warn);">🔄 品項資料管理</div>
+        <div style="font-size:.8rem;color:var(--text2);margin-bottom:1rem;">將系統內建的㑀猿串燒菜單品項寫入 Google Sheets，覆蓋現有品項資料。<br>⚠️ 此操作會清除現有庫存數量，請謹慎使用。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" style="background:rgba(232,197,58,.2);color:var(--warn);border:1px solid rgba(232,197,58,.4);" onclick="resetItemsToMenu('shuxiao')">🏬 重置樹孝店品項</button>
+          <button class="btn btn-sm" style="background:rgba(232,197,58,.2);color:var(--warn);border:1px solid rgba(232,197,58,.4);" onclick="resetItemsToMenu('hankou')">🏪 重置漢口店品項</button>
+          <button class="btn btn-sm" style="background:rgba(232,74,58,.15);color:var(--danger);border:1px solid rgba(232,74,58,.3);" onclick="resetItemsToMenu('both')">🏪🏬 兩店同時重置</button>
+        </div>
+      </div>
     </div>`;
   renderCatList();
+}
+
+
+// ══ RESET ITEMS TO MENU ═══════════════════════
+function resetItemsToMenu(target) {
+  const targetLabel = target==='both' ? '兩間店' : STORE_NAMES[target];
+  if(!confirm(`確定要將「${targetLabel}」的品項重置為㑀猿串燒菜單？\n現有庫存數量將全部歸零。`)) return;
+
+  const menuItems = [
+    {name:'極品牛肋條串',    cat:'肉類',   safe:10, unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'醬燒牛嫩肩串',    cat:'肉類',   safe:10, unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'特選牛肉串',       cat:'肉類',   safe:10, unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'招牌羊肉串',       cat:'肉類',   safe:8,  unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'醬烤豬五花串',     cat:'肉類',   safe:10, unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'無骨雞腿排串',     cat:'肉類',   safe:10, unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'香酥雞屁股串',     cat:'肉類',   safe:8,  unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'香烤雞軟骨',       cat:'肉類',   safe:8,  unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'酥烤雞皮串',       cat:'肉類',   safe:8,  unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'醬燒雞心串',       cat:'肉類',   safe:8,  unit:'串', orderType:'weekly', note:'完整一包才算，已拆開使用中不算'},
+    {name:'深海魷魚串',       cat:'海鮮',   safe:5,  unit:'串', orderType:'weekly', note:'整包計算，已開封使用中的不算'},
+    {name:'白蝦串（12隻/份）',cat:'海鮮',   safe:5,  unit:'份', orderType:'daily',  note:'整份計算，散裝的以單隻欄位登記'},
+    {name:'白蝦串單隻',       cat:'海鮮',   safe:20, unit:'隻', orderType:'daily',  note:'計算總隻數，包含已開封的'},
+    {name:'獨門豆皮串',       cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'手工米腸串',       cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'德式香腸串',       cat:'醬醬烤', safe:8,  unit:'串', orderType:'weekly', note:''},
+    {name:'酥脆甜不辣串',     cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'鮮脆花枝丸',       cat:'醬醬烤', safe:8,  unit:'串', orderType:'weekly', note:''},
+    {name:'百頁豆腐串',       cat:'醬醬烤', safe:8,  unit:'串', orderType:'weekly', note:''},
+    {name:'醬烤米血串',       cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'醬燒豆干串',       cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'基隆黑輪串',       cat:'醬醬烤', safe:10, unit:'串', orderType:'weekly', note:''},
+    {name:'多汁櫛瓜串',       cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'鮮香菇串',         cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'脆感筊白筍串',     cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'青椒串',           cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'爆汁杏鮑菇串',     cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'茄子串',           cat:'蔬菜',   safe:8,  unit:'串', orderType:'daily',  note:'每日進貨，計算當日剩餘數量'},
+    {name:'日式唐揚雞',       cat:'炸物飲品',safe:5, unit:'份', orderType:'weekly', note:''},
+    {name:'黃金脆薯條',       cat:'炸物飲品',safe:5, unit:'份', orderType:'weekly', note:''},
+    {name:'各式冷飲',         cat:'炸物飲品',safe:10,unit:'瓶', orderType:'weekly', note:'冰箱內全部瓶數'},
+    {name:'精選啤酒',         cat:'炸物飲品',safe:10,unit:'瓶', orderType:'weekly', note:'冰箱內全部瓶數'},
+    {name:'串燒竹籤',         cat:'耗材',   safe:500,unit:'支', orderType:'weekly', note:'以「支」計算，數清楚再填'},
+    {name:'炭火',             cat:'耗材',   safe:4,  unit:'袋', orderType:'weekly', note:'整袋計算，已開封使用中的不算'},
+    {name:'錫箔紙',           cat:'耗材',   safe:4,  unit:'卷', orderType:'weekly', note:'整卷計算，已開封使用中的不算'},
+    {name:'外帶袋',           cat:'耗材',   safe:100,unit:'個', orderType:'weekly', note:'清點整疊數量'},
+    {name:'醬料包',           cat:'耗材',   safe:50, unit:'包', orderType:'weekly', note:'清點整包數量'},
+  ];
+
+  const newItems = menuItems.map((item, idx) => ({
+    ...item, id: idx+1, qty: 0, lastIn: today()
+  }));
+
+  const targets = target === 'both' ? ['hankou','shuxiao'] : [target];
+  targets.forEach(store => {
+    storeData[store].items = newItems.map(i=>({...i}));
+    storeData[store].nextId = newItems.length + 1;
+  });
+
+  categories = ['肉類','海鮮','蔬菜','醬醬烤','炸物飲品','耗材'];
+  saveToSheet();
+  renderAll();
+  toast(`✅ ${targetLabel} 品項已重置為菜單內容，共 ${newItems.length} 項`);
 }
 
 // ══ LINE NOTIFY ═══════════════════════════════
