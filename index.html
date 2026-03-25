@@ -954,7 +954,7 @@ function setSyncStatus(status, text) {
 async function loadFromSheet() {
   setSyncStatus('syncing', '同步中…');
   try {
-    const res = await fetch(GAS_URL + '?action=read');
+    const res = await fetch(GAS_URL + '?action=read', { mode: 'cors' });
     const data = await res.json();
     if (data.rows && data.rows.length > 1) {
       parseSheetData(data.rows);
@@ -1071,11 +1071,16 @@ async function saveToSheet() {
         rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'', o.orderType||'weekly', store]);
       });
     });
-    await fetch(GAS_URL, { method:'POST', body:JSON.stringify({action:'write', rows}) });
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({action:'write', rows})
+    });
     setSyncStatus('synced', '已儲存 ✓');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
-    toast('⚠️ 儲存失敗，請檢查網路');
+    toast('⚠️ 儲存失敗：' + e.message);
   }
 }
 
