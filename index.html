@@ -571,8 +571,11 @@ header{padding:0 .8rem;}
 
 <div class="overlay" id="modal-editSafe">
 <div class="modal">
-<div class="modal-title">⚙️ 修改安全庫存</div>
-<div id="editSafeInfo" style="font-size:.84rem;color:var(--text2);margin-bottom:1rem;padding:10px;background:var(--surface2);border-radius:7px;"></div>
+<div class="modal-title">✏️ 編輯品項</div>
+<div class="fr2">
+<div class="fr"><label class="fl">品項名稱</label><input class="fi" id="es-name" placeholder="品項名稱"></div>
+<div class="fr"><label class="fl">分類</label><select class="fi" id="es-cat"></select></div>
+</div>
 <div class="fr2">
 <div class="fr"><label class="fl">安全庫存量</label><input class="fi" type="number" id="es-safe" min="0"></div>
 <div class="fr"><label class="fl">單位</label><input class="fi" id="es-unit"></div>
@@ -986,7 +989,7 @@ function statusLabel(s){ return {danger:'庫存不足',warn:'庫存偏低',ok:'�
 function refreshCatSelects() {
   const opts = categories.map(c=>`<option value="${c}">${c}</option>`).join('');
   ['catFilter','st-catFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">全部分類</option>'+opts;});
-  ['f-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=opts;});
+  ['f-cat','es-cat'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=opts;});
 }
 
 // ══ RENDER STATS ══════════════════════════════
@@ -1728,9 +1731,11 @@ function saveQty(){
 }
 function openEditSafe(id){
   if(!isAdmin()){toast('⛔ 僅管理員可修改');return;}
+  refreshCatSelects();
   const item=getItems().find(i=>i.id===id);
-  document.getElementById('editSafeInfo').innerHTML=`<strong>${item.name}</strong>　目前安全庫存：<span style="color:var(--accent);font-family:var(--mono)">${item.safe} ${item.unit}</span>`;
   document.getElementById('es-id').value=id;
+  document.getElementById('es-name').value=item.name;
+  document.getElementById('es-cat').value=item.cat;
   document.getElementById('es-safe').value=item.safe;
   document.getElementById('es-unit').value=item.unit;
   document.getElementById('es-ordertype').value=item.orderType||'weekly';
@@ -1740,13 +1745,17 @@ function openEditSafe(id){
 function saveSafe(){
   const id=parseInt(document.getElementById('es-id').value);
   const item=getItems().find(i=>i.id===id);
+  const newName=document.getElementById('es-name').value.trim();
+  if(!newName){toast('請輸入品項名稱');return;}
+  item.name=newName;
+  item.cat=document.getElementById('es-cat').value;
   item.safe=parseFloat(document.getElementById('es-safe').value)||0;
   item.unit=document.getElementById('es-unit').value.trim()||item.unit;
   item.orderType=document.getElementById('es-ordertype').value;
   item.note=document.getElementById('es-note').value.trim();
   closeModal('editSafe');
   saveToSheet();renderAll();
-  toast('✅ 安全庫存已更新');
+  toast('✅ 品項已更新');
 }
 function selectOrderType(type) {
   selectedOrderType = type;
