@@ -979,6 +979,9 @@ function parseSheetData(rows) {
   };
   let maxItemId = { hankou: 0, shuxiao: 0 };
   let maxOrdId  = { hankou: 0, shuxiao: 0 };
+  // 去重：同一個 store+id 只取最後一筆
+  const seenItems = new Set();
+  const seenOrders = new Set();
 
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -999,8 +1002,12 @@ function parseSheetData(rows) {
         unit: r[5]||'', lastIn: r[6]||today(),
         orderType: r[8]||'weekly', note: r[9]||''
       };
-      storeData[itemStore].items.push(item);
-      if (itemId > maxItemId[itemStore]) maxItemId[itemStore] = itemId;
+      const itemKey = itemStore + ':' + itemId;
+      if (!seenItems.has(itemKey)) {
+        seenItems.add(itemKey);
+        storeData[itemStore].items.push(item);
+        if (itemId > maxItemId[itemStore]) maxItemId[itemStore] = itemId;
+      }
 
     } else if (type.startsWith('order')) {
       const ordId = parseInt(r[0]);
@@ -1012,9 +1019,15 @@ function parseSheetData(rows) {
         status: type.replace('order_','') || 'pending',
         note: r[8]||'', orderType: r[9]||'weekly'
       };
-      storeData[ordStore].orders.push(order);
-      if (ordId > maxOrdId[ordStore]) maxOrdId[ordStore] = ordId;
+      const orderKey = ordStore + ':' + ordId;
+      if (!seenOrders.has(orderKey)) {
+        seenOrders.add(orderKey);
+        storeData[ordStore].orders.push(order);
+        if (ordId > maxOrdId[ordStore]) maxOrdId[ordStore] = ordId;
+      }
 
+    } else if (type === 'version') {
+      // 版本標記，忽略即可
     } else if (type === 'cat') {
       try { categories = JSON.parse(r[1]); } catch(e) {}
     } else if (type === 'pwd') {
@@ -1042,7 +1055,9 @@ function parseSheetData(rows) {
 async function saveToSheet() {
   setSyncStatus('syncing', '儲存中…');
   try {
+    const saveVersion = Date.now(); // 每次儲存的唯一版本號
     const rows = [['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','col10']];
+    rows.push(['VERSION', saveVersion, '', '', '', '', '', 'version', '', '', '']);
     rows.push(['0', JSON.stringify(categories), '', '', '', '', today(), 'cat']);
     rows.push(['0', JSON.stringify(passwords), '', '', '', '', today(), 'pwd']);
     rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today(), 'perm']);
