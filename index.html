@@ -1052,6 +1052,42 @@ function parseSheetData(rows) {
   storeData.shuxiao.nextOid = maxOrdId.shuxiao + 1;
 }
 
+
+function sendViaForm(url, data) {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.name = 'gasFrame_' + Date.now();
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.target = iframe.name;
+    form.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(data);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        document.body.removeChild(form);
+        document.body.removeChild(iframe);
+        resolve();
+      }, 500);
+    };
+
+    form.submit();
+    // 如果 onload 沒觸發，3秒後也 resolve
+    setTimeout(resolve, 3000);
+  });
+}
+
 async function saveToSheet() {
   setSyncStatus('syncing', '儲存中…');
   try {
@@ -1553,11 +1589,7 @@ async function forceClearAndReset(target) {
   // 強制清空再寫入
   setSyncStatus('syncing', '清空重置中…');
   try {
-    await fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'clear' })
-    });
+    await sendViaForm(GAS_URL, { action: 'clear' });
   } catch(e) {}
   await saveToSheet();
   renderAll();
