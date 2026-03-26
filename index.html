@@ -781,7 +781,7 @@ select.filter{font-size:.75rem;padding:6px 8px;}
 
 <script>
 // ══ CONFIG ════════════════════════════════════
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwjQU1tBvRqMKtSNUxdwUze-exk3k4u6u2pVaaH_tVteMT72xPlPLFSYyTwReLJnM2J/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxcoxrkPcPKUxKUMMiYg92Lwt3F9jO5l_Aj9XQuTRnF1-KkrVvgjWr2uvUCAVFsd84FNA/exec';
 
 // ══ STATE ════════════════════════════════════
 let passwords = {admin:'admin123', staffHankou:'hankou123', staffShuxiao:'shuxiao123'};
@@ -1553,7 +1553,11 @@ async function forceClearAndReset(target) {
   // 強制清空再寫入
   setSyncStatus('syncing', '清空重置中…');
   try {
-    await fetch(GAS_URL, { method:'POST', body:JSON.stringify({action:'clear'}) });
+    await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'clear' })
+    });
   } catch(e) {}
   await saveToSheet();
   renderAll();
