@@ -1053,52 +1053,24 @@ function parseSheetData(rows) {
 }
 
 
-function sendViaForm(url, data) {
-  return new Promise((resolve) => {
-    const iframe = document.createElement('iframe');
-    iframe.name = 'gasFrame_' + Date.now();
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    form.target = iframe.name;
-    form.style.display = 'none';
-
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'payload';
-    input.value = JSON.stringify(data);
-    form.appendChild(input);
-
-    document.body.appendChild(form);
-
-    iframe.onload = () => {
-      setTimeout(() => {
-        document.body.removeChild(form);
-        document.body.removeChild(iframe);
-        resolve();
-      }, 500);
-    };
-
-    form.submit();
-    // 如果 onload 沒觸發，3秒後也 resolve
-    setTimeout(resolve, 3000);
-  });
+async function gasGet(params) {
+  const qs = Object.entries(params)
+    .map(([k,v]) => k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : String(v)))
+    .join('&');
+  const res = await fetch(GAS_URL + '?' + qs);
+  return res.json();
 }
 
 async function saveToSheet() {
   setSyncStatus('syncing', '儲存中…');
   try {
-    const saveVersion = Date.now(); // 每次儲存的唯一版本號
-    const rows = [['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','col10']];
-    rows.push(['VERSION', saveVersion, '', '', '', '', '', 'version', '', '', '']);
-    rows.push(['0', JSON.stringify(categories), '', '', '', '', today(), 'cat']);
-    rows.push(['0', JSON.stringify(passwords), '', '', '', '', today(), 'pwd']);
-    rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today(), 'perm']);
-    rows.push(['0', JSON.stringify(lineNotifyToken), '', '', '', '', today(), 'line']);
-    rows.push(['0', JSON.stringify(lineTemplate), '', '', '', '', today(), 'linetemplate']);
+    const rows = [];
+    rows.push(['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','col10']);
+    rows.push(['0', JSON.stringify(categories), '', '', '', '', today(), 'cat', '', '', '']);
+    rows.push(['0', JSON.stringify(passwords), '', '', '', '', today(), 'pwd', '', '', '']);
+    rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today(), 'perm', '', '', '']);
+    rows.push(['0', JSON.stringify(lineNotifyToken), '', '', '', '', today(), 'line', '', '', '']);
+    rows.push(['0', JSON.stringify(lineTemplate), '', '', '', '', today(), 'linetemplate', '', '', '']);
     Object.keys(storeData).forEach(store => {
       storeData[store].items.forEach(item => {
         rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item', item.orderType||'weekly', item.note||'', store]);
@@ -1107,10 +1079,14 @@ async function saveToSheet() {
         rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'', o.orderType||'weekly', store]);
       });
     });
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({action:'write', rows})
-    });
+
+    // 先清空
+    await gasGet({action: 'clear'});
+    // 一行一行寫入（GET 不會有 CORS 問題）
+    for (let i = 0; i < rows.length; i++) {
+      await gasGet({action: 'append', row: rows[i]});
+    }
+
     setSyncStatus('synced', '已儲存 ✓');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
@@ -1589,7 +1565,7 @@ async function forceClearAndReset(target) {
   // 強制清空再寫入
   setSyncStatus('syncing', '清空重置中…');
   try {
-    await sendViaForm(GAS_URL, { action: 'clear' });
+    await gasGet({action: 'clear'});
   } catch(e) {}
   await saveToSheet();
   renderAll();
