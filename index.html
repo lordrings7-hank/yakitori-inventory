@@ -951,6 +951,39 @@ function setSyncStatus(status, text) {
 }
 
 // ══ GOOGLE SHEETS API ════════════════════════
+
+function parsePayload(p) {
+  // 重置
+  storeData = {
+    hankou:  { items: [], orders: [], nextId: 1,     nextOid: 1 },
+    shuxiao: { items: [], orders: [], nextId: 10001,  nextOid: 1 }
+  };
+  try { if (p.cats) categories = p.cats; } catch(e) {}
+  try { if (p.pwd) { if(p.pwd.admin) passwords.admin=p.pwd.admin; if(p.pwd.staffHankou) passwords.staffHankou=p.pwd.staffHankou; if(p.pwd.staffShuxiao) passwords.staffShuxiao=p.pwd.staffShuxiao; } } catch(e) {}
+  try { if (p.perm) staffPermissions = p.perm; } catch(e) {}
+  try { if (p.line) lineNotifyToken = p.line; } catch(e) {}
+  try { if (p.lt) { lineTemplate.header=p.lt.h||lineTemplate.header; lineTemplate.item_danger=p.lt.d||lineTemplate.item_danger; lineTemplate.item_warn=p.lt.w||lineTemplate.item_warn; lineTemplate.footer=p.lt.f||lineTemplate.footer; } } catch(e) {}
+
+  ['hankou','shuxiao'].forEach(store => {
+    const baseId = store === 'hankou' ? 1 : 10001;
+    const sd = p[store] || {};
+    let maxId = baseId - 1;
+    (sd.items || []).forEach(r => {
+      const item = { id:r[0], name:r[1], cat:r[2], qty:r[3], safe:r[4], unit:r[5], lastIn:r[6], orderType:r[7]||'weekly', note:r[8]||'' };
+      storeData[store].items.push(item);
+      if (item.id > maxId) maxId = item.id;
+    });
+    storeData[store].nextId = maxId + 1;
+    let maxOid = 0;
+    (sd.orders || []).forEach(r => {
+      const o = { id:r[0], itemId:r[1], itemName:r[2], qty:r[3], unit:r[4], supplier:r[5], date:r[6], status:r[7], note:r[8]||'', orderType:r[9]||'weekly' };
+      storeData[store].orders.push(o);
+      if (o.id > maxOid) maxOid = o.id;
+    });
+    storeData[store].nextOid = maxOid + 1;
+  });
+}
+
 async function loadFromSheet() {
   setSyncStatus('syncing', '同步中…');
   try {
@@ -1041,7 +1074,13 @@ function parseSheetData(rows) {
     } else if (type === 'line') {
       try { lineNotifyToken = JSON.parse(r[1]); } catch(e) {}
     } else if (type === 'linetemplate') {
-      try { lineTemplate = {...lineTemplate, ...JSON.parse(r[1])}; } catch(e) {}
+      try {
+        const lt = JSON.parse(r[1]);
+        if (lt.header !== undefined) lineTemplate.header = lt.h || lt.header;
+        if (lt.item_danger !== undefined || lt.d !== undefined) lineTemplate.item_danger = lt.d || lt.item_danger;
+        if (lt.item_warn !== undefined || lt.w !== undefined) lineTemplate.item_warn = lt.w || lt.item_warn;
+        if (lt.footer !== undefined || lt.f !== undefined) lineTemplate.footer = lt.f || lt.footer;
+      } catch(e) {}
     }
   }
 
@@ -1053,6 +1092,31 @@ function parseSheetData(rows) {
 }
 
 
+
+let _saveTimer = null;
+let _pendingSave = false;
+
+function scheduleSave() {
+  _pendingSave = true;
+  setSyncStatus('syncing', '等待儲存…');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    await saveToSheet();
+    _pendingSave = false;
+  }, 3000); // 3秒後才真正寫入
+}
+
+// 頁面關閉/隱藏時立刻存
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && _pendingSave) {
+    clearTimeout(_saveTimer);
+    markUnsaved();
+  }
+});
+window.addEventListener('beforeunload', () => {
+  if (_pendingSave) markUnsaved();
+});
+
 async function gasGet(params) {
   const qs = Object.entries(params)
     .map(([k,v]) => k + '=' + encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : String(v)))
@@ -1061,33 +1125,42 @@ async function gasGet(params) {
   return res.json();
 }
 
+function rowToStr(row) {
+  // 把每個欄位轉成字串，note 欄位（index 9）限制長度避免 URL 超長
+  return row.map((v, i) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    if (i === 9 && s.length > 50) return s.substring(0, 50); // note 欄位限制
+    return s;
+  });
+}
+
 async function saveToSheet() {
   setSyncStatus('syncing', '儲存中…');
   try {
     const rows = [];
-    rows.push(['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','col10']);
-    rows.push(['0', JSON.stringify(categories), '', '', '', '', today(), 'cat', '', '', '']);
-    rows.push(['0', JSON.stringify(passwords), '', '', '', '', today(), 'pwd', '', '', '']);
+    rows.push(['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','store']);
+    rows.push(['0', JSON.stringify(categories),       '', '', '', '', today(), 'cat',  '', '', '']);
+    rows.push(['0', JSON.stringify(passwords),        '', '', '', '', today(), 'pwd',  '', '', '']);
     rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today(), 'perm', '', '', '']);
-    rows.push(['0', JSON.stringify(lineNotifyToken), '', '', '', '', today(), 'line', '', '', '']);
-    rows.push(['0', JSON.stringify(lineTemplate), '', '', '', '', today(), 'linetemplate', '', '', '']);
+    rows.push(['0', JSON.stringify(lineNotifyToken),  '', '', '', '', today(), 'line', '', '', '']);
     Object.keys(storeData).forEach(store => {
       storeData[store].items.forEach(item => {
         rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item', item.orderType||'weekly', item.note||'', store]);
       });
       storeData[store].orders.forEach(o => {
-        rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.note||'', o.orderType||'weekly', store]);
+        rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.orderType||'weekly', o.note||'', store]);
       });
     });
 
-    // 先清空
-    await gasGet({action: 'clear'});
-    // 一行一行寫入（GET 不會有 CORS 問題）
+    // 清空後一行一行寫
+    await fetch(GAS_URL + '?action=clear');
     for (let i = 0; i < rows.length; i++) {
-      await gasGet({action: 'append', row: rows[i]});
+      await appendRow(rows[i]);
     }
 
     setSyncStatus('synced', '已儲存 ✓');
+    toast('✅ 已儲存到雲端！');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
     toast('⚠️ 儲存失敗：' + e.message);
@@ -1381,7 +1454,7 @@ function copyItemToStore(name, targetStore) {
   const t = storeData[targetStore];
   if (targetStore === 'shuxiao' && t.nextId < 10001) t.nextId = 10001;
   t.items.push({...src, id:t.nextId++, qty:0, lastIn:today()});
-  saveToSheet();
+  markUnsaved();
   renderComparePage();
   toast(`✅ 已將「${name}」複製到 ${STORE_NAMES[targetStore]}（數量設為 0，請手動更新）`);
 }
@@ -1390,7 +1463,7 @@ function deleteItemFrom(id, store) {
   const item = storeData[store].items.find(i=>i.id===id);
   if(!confirm(`確定從「${STORE_NAMES[store]}」刪除「${item?.name}」？`)) return;
   storeData[store].items = storeData[store].items.filter(i=>i.id!==id);
-  saveToSheet();
+  markUnsaved();
   renderComparePage();
   toast(`🗑 已從 ${STORE_NAMES[store]} 刪除`);
 }
@@ -1628,7 +1701,7 @@ function resetItemsToMenu(target) {
   });
 
   categories = ['肉類','海鮮','蔬菜','醬醬烤','炸物飲品','耗材'];
-  saveToSheet();
+  markUnsaved();
   renderAll();
   toast(`✅ ${targetLabel} 品項已重置為菜單內容，共 ${newItems.length} 項`);
 }
@@ -1654,7 +1727,7 @@ function saveLineTemplate() {
   lineTemplate.item_danger = document.getElementById('lt-danger').value;
   lineTemplate.item_warn   = document.getElementById('lt-warn').value;
   lineTemplate.footer      = document.getElementById('lt-footer').value;
-  saveToSheet();
+  markUnsaved();
   toast('✅ LINE 格式已儲存');
 }
 
@@ -1667,7 +1740,7 @@ function resetLineTemplate() {
     footer: '------------------\\n共 {品項數} 項，請確認叫料。'
   };
   renderAdminPage();
-  saveToSheet();
+  markUnsaved();
   toast('↩ 已恢復預設格式');
 }
 
@@ -1675,7 +1748,7 @@ function resetLineTemplate() {
 function saveLineTokens() {
   lineNotifyToken.hankou = document.getElementById('line-token-hankou').value.trim();
   lineNotifyToken.shuxiao = document.getElementById('line-token-shuxiao').value.trim();
-  saveToSheet();
+  markUnsaved();
   toast('✅ LINE Token 已儲存');
 }
 
@@ -2010,7 +2083,7 @@ function confirmDoneYes() {
     if(item && val >= 0) { item.qty = val; item.lastIn = t; count++; }
   });
   document.getElementById('stocktakeDoneOverlay').style.display = 'none';
-  saveToSheet();
+  markUnsaved();
   toast(`✅ 盤點完成！已儲存 ${count} 項`);
   setTimeout(() => closeStaffStocktake(), 1000);
 }
@@ -2062,7 +2135,7 @@ function saveStocktake(){
   });
   if(!count){toast('沒有輸入任何數量');closeModal('stocktake');return;}
   closeModal('stocktake');
-  saveToSheet();renderAll();
+  markUnsaved();renderAll();
   toast(`✅ 盤點完成！已更新 ${count} 項`);
 }
 
@@ -2100,7 +2173,7 @@ function addItem(){
   });
   closeModal('addItem');
   ['f-name','f-qty','f-safe','f-unit'].forEach(id=>document.getElementById(id).value='');
-  saveToSheet();renderAll();
+  markUnsaved();renderAll();
   const storeNames = targets.map(s=>STORE_NAMES[s]).join('、');
   toast(`✅ 已新增「${name}」到 ${storeNames}`);
 }
@@ -2122,7 +2195,7 @@ function saveQty(){
   else item.qty=Math.max(0,item.qty-val);
   item.lastIn=today();
   closeModal('editQty');
-  saveToSheet();renderAll();
+  markUnsaved();renderAll();
   toast('✅ 庫存已更新');
 }
 function openEditSafe(id){
@@ -2150,7 +2223,7 @@ function saveSafe(){
   item.orderType=document.getElementById('es-ordertype').value;
   item.note=document.getElementById('es-note').value.trim();
   closeModal('editSafe');
-  saveToSheet();renderAll();
+  markUnsaved();renderAll();
   toast('✅ 品項已更新');
 }
 function selectOrderType(type) {
@@ -2180,7 +2253,7 @@ function addOrder(){
   const s = sd();
   s.orders.push({id:s.nextOid++, itemId, itemName:item.name, qty, unit:item.unit, supplier, date, status:'pending', note, orderType:selectedOrderType});
   closeModal('addOrder');
-  saveToSheet();renderOrders();
+  markUnsaved();renderOrders();
   toast('📋 叫料單已建立：'+item.name);
 }
 function advanceOrder(id){
@@ -2193,20 +2266,20 @@ function advanceOrder(id){
     if(item){item.qty+=o.qty;item.lastIn=today();}
     toast('✅ 到貨確認！庫存已自動更新');
   } else toast('📦 已標記為已下單');
-  saveToSheet();renderAll();renderOrders();
+  markUnsaved();renderAll();renderOrders();
 }
 function deleteItem(id){
   if(!isAdmin()){toast('⛔ 僅管理員可刪除');return;}
   if(!confirm('確定刪除此食材？'))return;
   sd().items=sd().items.filter(i=>i.id!==id);
-  saveToSheet();renderAll();
+  markUnsaved();renderAll();
   toast('🗑 已刪除食材');
 }
 function deleteOrder(id){
   if(!isAdmin()){toast('⛔ 僅管理員可刪除');return;}
   if(!confirm('確定刪除此叫料紀錄？'))return;
   sd().orders=sd().orders.filter(o=>o.id!==id);
-  saveToSheet();renderOrders();
+  markUnsaved();renderOrders();
   toast('🗑 已刪除叫料紀錄');
 }
 function openChangePwd(role){
@@ -2229,7 +2302,7 @@ function savePassword(){
   if(p1!==p2){toast('兩次輸入的密碼不一致');return;}
   passwords[role]=p1;
   closeModal('changePwd');
-  saveToSheet();
+  markUnsaved();
   toast('🔑 密碼已更新並同步');
 }
 
@@ -2249,7 +2322,7 @@ function addCategory(){
   if(categories.includes(val)){toast('此分類已存在');return;}
   categories.push(val);
   document.getElementById('newCatInput').value='';
-  renderCatList();refreshCatSelects();saveToSheet();
+  renderCatList();refreshCatSelects();markUnsaved();
   toast('✅ 已新增分類：'+val);
 }
 function renameCategory(idx,newName){
@@ -2259,7 +2332,7 @@ function renameCategory(idx,newName){
   const old=categories[idx];
   categories[idx]=newName;
   Object.values(storeData).forEach(sd=>{sd.items.forEach(i=>{if(i.cat===old)i.cat=newName;});});
-  renderCatList();refreshCatSelects();renderInventory();saveToSheet();
+  renderCatList();refreshCatSelects();renderInventory();markUnsaved();
   toast(`✅ 分類「${old}」已改為「${newName}」`);
 }
 function deleteCategory(idx){
@@ -2268,12 +2341,12 @@ function deleteCategory(idx){
   if(hasItems){toast(`⚠️「${cat}」還有食材，請先修改食材分類`);return;}
   if(!confirm(`確定刪除分類「${cat}」？`))return;
   categories.splice(idx,1);
-  renderCatList();refreshCatSelects();saveToSheet();
+  renderCatList();refreshCatSelects();markUnsaved();
   toast('🗑 已刪除分類：'+cat);
 }
 function updatePermission(key,value){
   staffPermissions[key]=value;
-  saveToSheet();
+  markUnsaved();
   toast(value?`✅ 已開放員工「盤點」權限`:`🔒 已關閉員工「盤點」權限`);
 }
 
