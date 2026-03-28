@@ -1252,7 +1252,12 @@ function loadDefaultData() {
 }
 
 // ══ HELPERS ═══════════════════════════════════
-function getStatus(item){ const r=item.qty/item.safe; return r<=0.4?'danger':r<=0.8?'warn':'ok'; }
+function getStatus(item){
+  if(item.stockMode === 'yn') {
+    return item.needOrder === true ? 'danger' : 'ok';
+  }
+  const r=item.qty/item.safe; return r<=0.4?'danger':r<=0.8?'warn':'ok';
+}
 function statusLabel(s){ return {danger:'庫存不足',warn:'庫存偏低',ok:'庫存正常'}[s]; }
 function refreshCatSelects() {
   const opts = categories.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -2142,8 +2147,9 @@ function confirmDoneYes() {
     const item = getItems().find(i=>i.id===parseInt(id));
     if(!item) return;
     if(item.stockMode === 'yn') {
-      // yn 模式：true=夠用(不改數量), false=需叫料(設為0)
-      if(val === false) { item.qty = 0; item.lastIn = t; }
+      // yn 模式：true=夠用, false=需叫料
+      item.needOrder = (val === false);
+      item.lastIn = t;
       count++;
     } else if(typeof val === 'number' && val >= 0) {
       item.qty = val; item.lastIn = t; count++;
