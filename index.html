@@ -2275,6 +2275,7 @@ function openEditSafe(id){
   document.getElementById('es-safe').value=item.safe;
   document.getElementById('es-unit').value=item.unit;
   document.getElementById('es-ordertype').value=item.orderType||'weekly';
+  document.getElementById('es-stockmode').value=item.stockMode||'qty';
   document.getElementById('es-note').value=item.note||'';
   openModal('editSafe');
 }
@@ -2288,6 +2289,7 @@ function saveSafe(){
   item.safe=parseFloat(document.getElementById('es-safe').value)||0;
   item.unit=document.getElementById('es-unit').value.trim()||item.unit;
   item.orderType=document.getElementById('es-ordertype').value;
+  item.stockMode=document.getElementById('es-stockmode').value;
   item.note=document.getElementById('es-note').value.trim();
   closeModal('editSafe');
   markUnsaved();renderAll();
