@@ -2400,7 +2400,16 @@ function renderAll(){renderStats();renderInventory();refreshCatSelects();}
 
 // ══ INIT ════════════════════════════════════
 (async function init(){
-  await new Promise(r=>setTimeout(r,600));
+  // 先從 Firebase 載入密碼，再顯示登入畫面
+  try {
+    const res = await fetch(FB_URL + '/data.json');
+    const data = await res.json();
+    if (data && data.passwords) {
+      if(data.passwords.admin) passwords.admin = data.passwords.admin;
+      if(data.passwords.staffHankou) passwords.staffHankou = data.passwords.staffHankou;
+      if(data.passwords.staffShuxiao) passwords.staffShuxiao = data.passwords.staffShuxiao;
+    }
+  } catch(e) {}
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
 })();
