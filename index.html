@@ -782,6 +782,7 @@ select.filter{font-size:.75rem;padding:6px 8px;}
 <script>
 // ══ CONFIG ════════════════════════════════════
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxcoxrkPcPKUxKUMMiYg92Lwt3F9jO5l_Aj9XQuTRnF1-KkrVvgjWr2uvUCAVFsd84FNA/exec';
+const FB_URL = 'https://yakitori-inventory-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 // ══ STATE ════════════════════════════════════
 let passwords = {admin:'admin123', staffHankou:'hankou123', staffShuxiao:'shuxiao123'};
@@ -984,13 +985,37 @@ function parsePayload(p) {
   });
 }
 
+
+function parseFirebaseData(data) {
+  try { if (data.categories) categories = data.categories; } catch(e) {}
+  try { if (data.passwords) {
+    if(data.passwords.admin) passwords.admin = data.passwords.admin;
+    if(data.passwords.staffHankou) passwords.staffHankou = data.passwords.staffHankou;
+    if(data.passwords.staffShuxiao) passwords.staffShuxiao = data.passwords.staffShuxiao;
+  }} catch(e) {}
+  try { if (data.staffPermissions) staffPermissions = data.staffPermissions; } catch(e) {}
+  try { if (data.lineNotifyToken) lineNotifyToken = data.lineNotifyToken; } catch(e) {}
+  try { if (data.lineTemplate) lineTemplate = {...lineTemplate, ...data.lineTemplate}; } catch(e) {}
+
+  ['hankou', 'shuxiao'].forEach(store => {
+    if (data[store]) {
+      storeData[store].items   = data[store].items   || [];
+      storeData[store].orders  = data[store].orders  || [];
+      storeData[store].nextId  = data[store].nextId  || (store === 'shuxiao' ? 10001 : 1);
+      storeData[store].nextOid = data[store].nextOid || 1;
+    }
+  });
+}
+
 async function loadFromSheet() {
   setSyncStatus('syncing', '同步中…');
   try {
-    const res = await fetch(GAS_URL + '?action=read');
+    const res = await fetch(FB_URL + '/data.json');
     const data = await res.json();
-    if (data.rows && data.rows.length > 1) {
-      parseSheetData(data.rows);
+    if (data && data.hankou) {
+      parseFirebaseData(data);
+    } else {
+      if (getItems().length === 0) loadDefaultData();
     }
     setSyncStatus('synced', '已同步');
     if (currentRole) applyRoleUI();
@@ -1121,29 +1146,32 @@ function rowToStr(row) {
 async function saveToSheet() {
   setSyncStatus('syncing', '儲存中…');
   try {
-    const rows = [];
-    rows.push(['id','name','cat','qty','safe','unit','lastIn','type','col8','col9','store']);
-    rows.push(['0', JSON.stringify(categories),       '', '', '', '', today(), 'cat',  '', '', '']);
-    rows.push(['0', JSON.stringify(passwords),        '', '', '', '', today(), 'pwd',  '', '', '']);
-    rows.push(['0', JSON.stringify(staffPermissions), '', '', '', '', today(), 'perm', '', '', '']);
-    rows.push(['0', JSON.stringify(lineNotifyToken),  '', '', '', '', today(), 'line', '', '', '']);
-    Object.keys(storeData).forEach(store => {
-      storeData[store].items.forEach(item => {
-        rows.push([item.id, item.name, item.cat, item.qty, item.safe, item.unit, item.lastIn, 'item', item.orderType||'weekly', item.note||'', store]);
-      });
-      storeData[store].orders.forEach(o => {
-        rows.push([o.id, o.itemId, o.itemName, o.qty, o.unit, o.supplier, o.date, 'order_'+o.status, o.orderType||'weekly', o.note||'', store]);
-      });
+    const payload = {
+      categories,
+      passwords,
+      staffPermissions,
+      lineNotifyToken,
+      lineTemplate,
+      hankou: {
+        items: storeData.hankou.items,
+        orders: storeData.hankou.orders,
+        nextId: storeData.hankou.nextId,
+        nextOid: storeData.hankou.nextOid
+      },
+      shuxiao: {
+        items: storeData.shuxiao.items,
+        orders: storeData.shuxiao.orders,
+        nextId: storeData.shuxiao.nextId,
+        nextOid: storeData.shuxiao.nextOid
+      }
+    };
+    const res = await fetch(FB_URL + '/data.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
-
-    // 清空後一行一行寫
-    await gasGet({action: 'clear'});
-    for (let i = 0; i < rows.length; i++) {
-      await gasGet({action: 'append', row: rows[i]});
-    }
-
+    if (!res.ok) throw new Error('Firebase error: ' + res.status);
     setSyncStatus('synced', '已儲存 ✓');
-    toast('✅ 已儲存到雲端！');
   } catch(e) {
     setSyncStatus('error', '儲存失敗');
     toast('⚠️ 儲存失敗：' + e.message);
