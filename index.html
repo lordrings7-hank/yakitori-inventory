@@ -198,6 +198,11 @@ td.name{font-weight:500;}td.mono{font-family:var(--mono);font-size:.8rem;}
 .sst-grid{display:flex;flex-direction:column;gap:10px;}
 .sst-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;display:flex;align-items:center;gap:12px;}
 .sst-card.filled{border-color:var(--ok);background:rgba(74,232,154,.04);}
+.sst-card.filled-no{border-color:var(--danger);background:rgba(232,74,58,.04);}
+.sst-yn-btns{display:flex;gap:8px;flex:1;}
+.sst-yn-btn{flex:1;padding:10px 6px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--sans);touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:all .15s;}
+.sst-yn-btn.yes{border-color:var(--ok);background:rgba(74,232,154,.15);color:var(--ok);}
+.sst-yn-btn.no{border-color:var(--danger);background:rgba(232,74,58,.15);color:var(--danger);}
 .sst-info{flex:1;min-width:0;}
 .sst-name{font-size:1rem;font-weight:600;}
 .sst-cur{font-size:.78rem;color:var(--text3);margin-top:3px;}
@@ -488,17 +493,19 @@ select.filter{font-size:.75rem;padding:6px 8px;}
 
 <!-- 盤點完成確認對話框 -->
 <div id="stocktakeDoneOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:500;align-items:center;justify-content:center;padding:1rem;">
-<div style="background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:2rem 1.6rem;width:90%;max-width:360px;text-align:center;">
-<div style="font-size:3rem;margin-bottom:.8rem;">📋</div>
-<div style="font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:.4rem;">盤點已完成</div>
-<div style="font-size:.85rem;color:var(--text2);margin-bottom:.3rem;" id="doneCountText">已更新 0 項數量</div>
-<div style="font-size:.82rem;color:var(--text3);margin-bottom:1.6rem;" id="doneStoreText">漢口店　盤點人員確認</div>
-<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.9rem;margin-bottom:1.4rem;text-align:left;" id="doneItemList"></div>
-<div style="font-size:.9rem;font-weight:600;color:var(--text);margin-bottom:1rem;">請確認以上數量無誤？</div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-<button onclick="confirmDoneYes()" style="padding:13px;background:var(--ok);color:#000;border:none;border-radius:10px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:var(--sans);">✅ 確認沒問題</button>
-<button onclick="confirmDoneNo()" style="padding:13px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:10px;font-size:.9rem;cursor:pointer;font-family:var(--sans);">✏️ 返回修改</button>
+<div style="background:var(--surface);border:2px solid var(--border);border-radius:20px;padding:1.4rem 1.4rem;width:95%;max-width:380px;max-height:88vh;display:flex;flex-direction:column;">
+<div style="text-align:center;margin-bottom:.8rem;">
+<div style="font-size:2rem;margin-bottom:.3rem;">📋</div>
+<div style="font-size:1rem;font-weight:700;color:var(--text);">確認盤點結果</div>
+<div style="font-size:.8rem;color:var(--text2);margin-top:.2rem;" id="doneCountText">已更新 0 項數量</div>
+<div style="font-size:.75rem;color:var(--text3);" id="doneStoreText">漢口店　盤點人員確認</div>
 </div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.8rem;">
+<button onclick="confirmDoneYes()" style="padding:12px;background:var(--ok);color:#000;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--sans);">✅ 確認沒問題</button>
+<button onclick="confirmDoneNo()" style="padding:12px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:10px;font-size:.85rem;cursor:pointer;font-family:var(--sans);">✏️ 返回修改</button>
+</div>
+<div style="font-size:.78rem;color:var(--text3);margin-bottom:.5rem;text-align:center;">請確認以下數量無誤：</div>
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.8rem;overflow-y:auto;flex:1;" id="doneItemList"></div>
 </div>
 </div>
 
@@ -686,6 +693,13 @@ select.filter{font-size:.75rem;padding:6px 8px;}
 <option value="daily">🥬 每日蔬菜叫料</option>
 <option value="both">兩者都是</option>
 <option value="none">不自動叫料</option>
+</select>
+</div>
+<div class="fr">
+<label class="fl">盤點模式</label>
+<select class="fi" id="es-stockmode">
+<option value="qty">🔢 輸入數量（預設）</option>
+<option value="yn">✅ 是否模式（夠用 / 需要叫料）</option>
 </select>
 </div>
 <div class="fr">
@@ -1999,15 +2013,17 @@ function renderSstGrid() {
        diff < 0 ? `<span style="color:var(--danger)">${diff}</span>` :
        `<span style="color:var(--text3)">±0</span>`) : '';
     const hasRule = !!(item.note && item.note.trim());
-    return `<div class="sst-card${isFilled?' filled':''}" id="sstcard-${item.id}">
-      <div class="sst-info">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div class="sst-name">${item.name}</div>
-          ${hasRule ? `<button class="sst-rule-btn has-rule" onclick="toggleRule(${item.id})" title="盤點說明">？</button>` : ''}
-        </div>
-        <div class="sst-rule" id="sstrule-${item.id}">${item.note||''}</div>
-        <div class="sst-cur"><span class="badge badge-cat" style="font-size:.62rem;">${item.cat}</span>　現有：<strong style="font-family:var(--mono)">${item.qty} ${item.unit}</strong></div>
-      </div>
+    const isYN = item.stockMode === 'yn';
+    const ynVal = sstData[item.id]; // true=夠用 false=需叫料 undefined=未填
+    const cardClass = isYN
+      ? (ynVal === true ? ' filled' : ynVal === false ? ' filled-no' : '')
+      : (isFilled ? ' filled' : '');
+
+    const controls = isYN ? `
+      <div class="sst-yn-btns">
+        <button class="sst-yn-btn${ynVal===true?' yes':''}" onclick="sstYN(${item.id},true)">✅ 夠用</button>
+        <button class="sst-yn-btn${ynVal===false?' no':''}" onclick="sstYN(${item.id},false)">❌ 需叫料</button>
+      </div>` : `
       <div class="sst-controls">
         <button class="sst-btn" onclick="sstAdjust(${item.id},-1)">－</button>
         <input class="sst-num" type="number" min="0" placeholder="${item.qty}"
@@ -2017,7 +2033,18 @@ function renderSstGrid() {
         <button class="sst-btn" onclick="sstAdjust(${item.id},1)">＋</button>
       </div>
       <div class="sst-unit">${item.unit}</div>
-      <div class="sst-diff" id="sstdiff-${item.id}">${diffHtml}</div>
+      <div class="sst-diff" id="sstdiff-${item.id}">${diffHtml}</div>`;
+
+    return `<div class="sst-card${cardClass}" id="sstcard-${item.id}">
+      <div class="sst-info" style="flex:1;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="sst-name">${item.name}</div>
+          ${hasRule ? `<button class="sst-rule-btn has-rule" onclick="toggleRule(${item.id})" title="盤點說明">？</button>` : ''}
+        </div>
+        <div class="sst-rule" id="sstrule-${item.id}">${item.note||''}</div>
+        <div class="sst-cur"><span class="badge badge-cat" style="font-size:.62rem;">${item.cat}</span>　現有：<strong style="font-family:var(--mono)">${item.qty} ${item.unit}</strong></div>
+      </div>
+      ${controls}
     </div>`;
   }).join('');
 }
@@ -2047,6 +2074,28 @@ function sstUpdate(id, val) {
   document.getElementById('sstProgressText').textContent = `${filled} / ${total} 項已盤點`;
 }
 
+function sstYN(id, enough) {
+  sstData[id] = enough; // true=夠用, false=需叫料
+  const item = getItems().find(i=>i.id===id);
+  const card = document.getElementById('sstcard-'+id);
+  if(enough) {
+    card.classList.remove('filled-no');
+    card.classList.add('filled');
+  } else {
+    card.classList.remove('filled');
+    card.classList.add('filled-no');
+  }
+  // 更新按鈕樣式
+  const btns = card.querySelectorAll('.sst-yn-btn');
+  if(btns[0]) btns[0].className = 'sst-yn-btn' + (enough ? ' yes' : '');
+  if(btns[1]) btns[1].className = 'sst-yn-btn' + (!enough ? ' no' : '');
+  // 更新進度
+  const total = getItems().length;
+  const filled = Object.keys(sstData).filter(k=>sstData[k]!==undefined).length;
+  document.getElementById('sstProgressFill').style.width = total ? (filled/total*100)+'%' : '0%';
+  document.getElementById('sstProgressText').textContent = `${filled} / ${total} 項已盤點`;
+}
+
 function sstAdjust(id, delta) {
   const input = document.getElementById('sstinput-'+id);
   const item = getItems().find(i=>i.id===id);
@@ -2058,7 +2107,7 @@ function sstAdjust(id, delta) {
 
 function saveStocktakeStaff() {
   // 先統計，顯示確認對話框
-  const entries = Object.entries(sstData).filter(([id, val]) => val !== undefined && val !== null && val >= 0);
+  const entries = Object.entries(sstData).filter(([id, val]) => val !== undefined && val !== null);
   if(!entries.length){ toast('沒有輸入任何數量'); return; }
 
   // 建立摘要清單
@@ -2091,7 +2140,14 @@ function confirmDoneYes() {
   Object.entries(sstData).forEach(([id, val]) => {
     if(val === undefined || val === null) return;
     const item = getItems().find(i=>i.id===parseInt(id));
-    if(item && val >= 0) { item.qty = val; item.lastIn = t; count++; }
+    if(!item) return;
+    if(item.stockMode === 'yn') {
+      // yn 模式：true=夠用(不改數量), false=需叫料(設為0)
+      if(val === false) { item.qty = 0; item.lastIn = t; }
+      count++;
+    } else if(typeof val === 'number' && val >= 0) {
+      item.qty = val; item.lastIn = t; count++;
+    }
   });
   document.getElementById('stocktakeDoneOverlay').style.display = 'none';
   markUnsaved();
