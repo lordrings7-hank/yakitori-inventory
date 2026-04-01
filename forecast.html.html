@@ -1150,10 +1150,11 @@ function predictItems(wd, rain, tavg, isSwknd, hol, scaleRatio) {
 const HIST_DAILY_TOTAL = 110; // 2025年平均每日現場銷售總串數
 
 function calcScaleRatio(predictedRevenue, wd) {
-  // 以今日預測營業額 / 歷史同星期平均營業額 作為縮放係數
-  const OVERALL_WD_AVG = [7418, 6886, 6841, 6451, 9390, 10465, 8308]; // 全期星期均
-  const wdAvg = OVERALL_WD_AVG[wd] || 8884;
-  return Math.max(0.5, Math.min(2.0, predictedRevenue / wdAvg));
+  // 動態讀取當前店鋪的 p50（中位數）作為基準
+  // 避免切換到樹孝店時，用漢口的星期均值導致備料嚴重失準
+  const wdp   = currentStore.wdp[wd] || currentStore.wdp[0];
+  const wdAvg = wdp.p50 || currentStore.overall;
+  return Math.max(0.4, Math.min(2.5, predictedRevenue / wdAvg));
 }
 
 // Badge HTML
