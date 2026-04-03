@@ -414,24 +414,29 @@ tbody td:last-child{border-right:none}
         <div class="sec-sub">設定規則後自動填入，完成後可手動調整</div></div>
       </div>
 
-      <!-- 步驟一：設定月份 -->
+      <!-- 步驟一：設定日期範圍 -->
       <div class="card">
         <div class="card-title">⚙️ 排班設定</div>
         <div class="frow f3">
-          <div class="fgrp"><label class="flbl">年份</label><select class="finp" id="asYear"></select></div>
-          <div class="fgrp"><label class="flbl">月份</label>
-            <select class="finp" id="asMonth">
-              <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
-              <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
-              <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
-              <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
-            </select>
+          <div class="fgrp">
+            <label class="flbl">開始日期</label>
+            <input class="finp" type="date" id="asDateFrom">
+          </div>
+          <div class="fgrp">
+            <label class="flbl">結束日期</label>
+            <input class="finp" type="date" id="asDateTo">
           </div>
           <div class="fgrp"><label class="flbl">分店</label>
             <select class="finp" id="asStore">
               <option value="漢口店">漢口店</option><option value="樹孝店">樹孝店</option>
             </select>
           </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-g btn-sm" onclick="setAutoDateRange('thisWeek')">📅 本週</button>
+          <button class="btn btn-g btn-sm" onclick="setAutoDateRange('nextWeek')">📅 下週</button>
+          <button class="btn btn-g btn-sm" onclick="setAutoDateRange('thisMonth')">📅 本月</button>
+          <button class="btn btn-g btn-sm" onclick="setAutoDateRange('nextMonth')">📅 下個月</button>
         </div>
       </div>
 
@@ -1705,7 +1710,32 @@ function recheckGrill(ds) {
 // ═══════════════════════════════════════════════════════
 var autoRules = {}; // { groupKey: [ staffName, ... ] }
 
+function setAutoDateRange(type) {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var from, to;
+  if (type === 'thisWeek') {
+    // 本週一到週日
+    var wd = today.getDay() || 7;
+    from = new Date(today); from.setDate(today.getDate() - wd + 1);
+    to = new Date(from); to.setDate(from.getDate() + 6);
+  } else if (type === 'nextWeek') {
+    var wd2 = today.getDay() || 7;
+    from = new Date(today); from.setDate(today.getDate() - wd2 + 8);
+    to = new Date(from); to.setDate(from.getDate() + 6);
+  } else if (type === 'thisMonth') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1);
+    to = new Date(today.getFullYear(), today.getMonth()+1, 0);
+  } else if (type === 'nextMonth') {
+    from = new Date(today.getFullYear(), today.getMonth()+1, 1);
+    to = new Date(today.getFullYear(), today.getMonth()+2, 0);
+  }
+  document.getElementById('asDateFrom').value = fmtDate(from);
+  document.getElementById('asDateTo').value = fmtDate(to);
+}
+
 async function initAutoSched() {
+  // 預設選下週
+  setAutoDateRange('nextWeek');
   // 從 DB 載入規則
   try {
     var ruleKey = 'auto_rules_' + STORE;
@@ -1768,81 +1798,151 @@ function saveAutoRules() {
 }
 
 async function runAutoSched() {
-  saveAutoRules(); // 先存規則
+  saveAutoRules();
 
-  var yr = +document.getElementById('asYear').value;
-  var mo = +document.getElementById('asMonth').value;
-  var store = document.getElementById('asStore').value;
+  var dateFrom = document.getElementById('asDateFrom').value;
+  var dateTo   = document.getElementById('asDateTo').value;
+  var store    = document.getElementById('asStore').value;
   var conflictMode = document.getElementById('asConflict').value;
-  var overwrite = document.getElementById('asOverwrite').value;
-  var ym = yr + '-' + String(mo).padStart(2,'0');
+  var overwrite    = document.getElementById('asOverwrite').value;
 
-  // 讀取本月既有排班
-  var asDays = new Date(yr, mo, 0).getDate();
-  var asFrom = ym + '-01';
-  var asTo   = ym + '-' + String(asDays).padStart(2,'0');
-  var r1 = await SB.from('schedules').select('*').eq('store', store).gte('schedule_date', asFrom).lte('schedule_date', asTo);
+  if (!dateFrom || !dateTo || dateFrom > dateTo) {
+    toast('er', '請選擇正確的日期範圍'); return;
+  }
+
+  var dtFrom = new Date(dateFrom); dtFrom.setHours(0,0,0,0);
+  var dtTo   = new Date(dateTo);   dtTo.setHours(0,0,0,0);
+
+  // 排班期間的年月（跨月時取 from 的月份作為計費月）
+  var billingYr = dtFrom.getFullYear();
+  var billingMo = dtFrom.getMonth() + 1;
+  var billingYm = billingYr + '-' + String(billingMo).padStart(2,'0');
+
+  // ── 讀取既有排班（日期範圍內）──
+  var r1 = await SB.from('schedules').select('*')
+    .eq('store', store).gte('schedule_date', dateFrom).lte('schedule_date', dateTo);
   var existData = {};
   (r1.data || []).forEach(function(r) { existData[r.schedule_date] = r; });
 
-  // 讀取禁排
-  var r2 = await SB.from('blocked_times').select('*,staff(name)').gte('blocked_date', ym+'-01').lte('blocked_date', ym+'-31');
-  var blockedMap = {}; // { 'YYYY-MM-DD_name': ['上半場','下半場',...] }
-  (r2.data || []).forEach(function(b) {
+  // ── 讀取上週排班（連班防呆用）──
+  var prevWeekFrom = new Date(dtFrom); prevWeekFrom.setDate(dtFrom.getDate() - 7);
+  var prevWeekTo   = new Date(dtFrom); prevWeekTo.setDate(dtFrom.getDate() - 1);
+  var rPrev = await SB.from('schedules').select('*')
+    .eq('store', store)
+    .gte('schedule_date', fmtDate(prevWeekFrom))
+    .lte('schedule_date', fmtDate(prevWeekTo));
+  var prevData = {};
+  (rPrev.data || []).forEach(function(r) { prevData[r.schedule_date] = r; });
+
+  // ── 讀取本月已有排班（班數平均用）──
+  var monthFrom = billingYm + '-01';
+  var monthPrevDay = new Date(dtFrom); monthPrevDay.setDate(dtFrom.getDate() - 1);
+  var rMonth = { data: [] };
+  if (fmtDate(monthPrevDay) >= monthFrom) {
+    rMonth = await SB.from('schedules').select('*')
+      .eq('store', store)
+      .gte('schedule_date', monthFrom)
+      .lte('schedule_date', fmtDate(monthPrevDay));
+  }
+
+  // ── 讀取禁排 ──
+  var rBlk = await SB.from('blocked_times').select('*,staff(name)')
+    .gte('blocked_date', dateFrom).lte('blocked_date', dateTo);
+  var blockedMap = {};
+  (rBlk.data || []).forEach(function(b) {
     var key = b.blocked_date + '_' + (b.staff ? b.staff.name : '');
     if (!blockedMap[key]) blockedMap[key] = [];
     blockedMap[key].push(b.session);
   });
 
-  var days = new Date(yr, mo, 0).getDate();
-  var result = {}; // 新排班結果
+  // ── 計算每人本月累積班數（開始日前）──
+  var monthCount = {}; // { name: count }
+  (rMonth.data || []).forEach(function(row) {
+    GROUPS.forEach(function(grp) {
+      grp.slots.forEach(function(k) {
+        var nm = row[k]; if (!nm) return;
+        if (!monthCount[nm]) monthCount[nm] = 0;
+        monthCount[nm]++;
+      });
+    });
+  });
+
+  // ── 計算每人連續上班天數（往前看7天）──
+  function getConsecutiveDays(name, upToDate) {
+    var count = 0;
+    var d = new Date(upToDate);
+    for (var i = 0; i < 7; i++) {
+      d.setDate(d.getDate() - 1);
+      var ds2 = fmtDate(d);
+      var row = prevData[ds2] || existData[ds2];
+      if (!row) break;
+      var worked = GROUPS.some(function(grp) {
+        return grp.slots.some(function(k) { return row[k] === name; });
+      });
+      if (worked) count++;
+      else break;
+    }
+    return count;
+  }
+
+  // ── 建立日期清單 ──
+  var dates = [];
+  var cur = new Date(dtFrom);
+  while (cur <= dtTo) {
+    dates.push(fmtDate(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  var result = {};
   var previewLines = [];
+  // 本次排班累計（避免連班跨越排班範圍內）
+  var inRangeCount = {};
 
-  // 每個群組的輪班指針
-  var pointers = {};
-  GROUPS.forEach(function(grp) { pointers[grp.key] = 0; });
-
-  for (var d = 1; d <= days; d++) {
-    var dt = new Date(yr, mo-1, d);
-    var ds = ym + '-' + String(d).padStart(2,'0');
+  dates.forEach(function(ds) {
     var existing = existData[ds] || {};
     result[ds] = Object.assign({}, existing, { schedule_date: ds, store: store });
+  });
 
+  // ── 主排班邏輯 ──
+  dates.forEach(function(ds) {
     GROUPS.forEach(function(grp) {
-      var pool = autoRules[grp.key] || [];
-      if (!pool.length) return; // 該班別無規則，跳過
+      var pool = (autoRules[grp.key] || []).slice(); // copy
+      if (!pool.length) return;
 
       var n = DEFAULT_SLOTS[grp.key] || 2;
-      var sLabel = grp.session === 'upper' ? '上半場' : grp.session === 'lower' ? '下半場' : grp.role === 'opener' ? '開店' : '收店';
+      var sLabel = grp.session==='upper'?'上半場':grp.session==='lower'?'下半場':grp.role==='opener'?'開店':'收店';
 
       for (var slot = 0; slot < n; slot++) {
-        var colKey = grp.slots[slot];
-        if (!colKey) continue;
-
-        // 若已有值且模式為 only_empty，跳過
+        var colKey = grp.slots[slot]; if (!colKey) continue;
         if (overwrite === 'empty_only' && result[ds][colKey]) continue;
 
-        // 從輪班池找下一個可用員工
-        var tried = 0;
-        var assigned = null;
-        while (tried < pool.length) {
-          var candidate = pool[pointers[grp.key] % pool.length];
-          pointers[grp.key]++;
-          tried++;
+        // 依「本月累積班數最少」排序候選人
+        var sorted = pool.slice().sort(function(a, b) {
+          var ca = (monthCount[a] || 0) + (inRangeCount[a] || 0);
+          var cb = (monthCount[b] || 0) + (inRangeCount[b] || 0);
+          return ca - cb;
+        });
 
-          // 檢查禁排
+        var assigned = null;
+        for (var ti = 0; ti < sorted.length; ti++) {
+          var candidate = sorted[ti];
+
+          // 禁排檢查
           var bKey = ds + '_' + candidate;
           var blocked = blockedMap[bKey] || [];
           var isBlocked = blocked.indexOf(sLabel) !== -1 || blocked.indexOf('全天') !== -1;
-
           if (isBlocked) {
             if (conflictMode === 'skip') continue;
-            else { break; } // empty mode
+            else break;
           }
 
-          // 檢查同一天同一人是否已排超過
-          var alreadyCount = grp.slots.filter(function(k) { return result[ds][k] === candidate; }).length;
-          if (alreadyCount > 0) continue; // 同格不重複排
+          // 同天同人不重複
+          var alreadyToday = grp.slots.some(function(k) { return result[ds][k] === candidate; });
+          if (alreadyToday) continue;
+
+          // 連班防呆：上週連班 + 本次已排 ≤ 5（第6天警告，不排）
+          var prevConsec = getConsecutiveDays(candidate, ds);
+          if (prevConsec >= 6) continue; // 已連6天，跳過
 
           assigned = candidate;
           break;
@@ -1850,17 +1950,20 @@ async function runAutoSched() {
 
         result[ds][colKey] = assigned || null;
         if (assigned) {
+          if (!inRangeCount[assigned]) inRangeCount[assigned] = 0;
+          inRangeCount[assigned]++;
           previewLines.push(ds + ' ' + grp.label + ' 格' + (slot+1) + ': ' + assigned);
         }
       }
     });
-  }
+  });
 
-  // 寫入 schedData（讓排班頁可以看到）
-  schedData = result;
-  // 切換到排班頁讓用戶看到
-  document.getElementById('scYear').value = yr;
-  document.getElementById('scMonth').value = mo;
+  // 寫入 schedData
+  Object.assign(schedData, result);
+  // 標記為 dirty（需要儲存）
+  dates.forEach(function(ds) { markDirty(ds, 'schedule_date'); });
+
+  // 同步分店顯示
   STORE = store;
   document.querySelectorAll('.st-btn').forEach(function(b) {
     b.classList.toggle('on', b.textContent === store);
@@ -1869,11 +1972,31 @@ async function runAutoSched() {
   // 顯示預覽
   var pw = document.getElementById('autoPreviewWrap');
   pw.style.display = 'block';
-  var plines = previewLines.slice(0, 60);
-  document.getElementById('autoPreview').innerHTML =
-    '<strong style="color:var(--teal)">共排入 ' + previewLines.length + ' 筆</strong><br>' +
-    plines.map(function(l){ return '<span style="color:var(--text2)">'+l+'</span>'; }).join('<br>') +
-    (previewLines.length > 60 ? '<br><em style="color:var(--text3)">... 還有 '+(previewLines.length-60)+' 筆</em>' : '');
+
+  // 連班警告統計
+  var consecWarns = [];
+  Object.keys(inRangeCount).forEach(function(nm) {
+    var total = getConsecutiveDays(nm, dateTo) + (inRangeCount[nm] || 0);
+    if (total >= 6) consecWarns.push(nm + '（累計' + total + '天）');
+  });
+
+  var warnHtml = consecWarns.length
+    ? '<div class="alert warn" style="margin-bottom:10px"><span class="alert-ic">⚠️</span><span><strong>連班警告：</strong>' + consecWarns.join('、') + ' 接近或達到6天上限</span></div>'
+    : '<div class="alert ok" style="margin-bottom:10px"><span class="alert-ic">✅</span><span>所有人連班天數正常</span></div>';
+
+  // 班數平均摘要
+  var summaryHtml = '<div style="margin-bottom:10px;font-size:12px;color:var(--text2)">'
+    + Object.keys(inRangeCount).sort(function(a,b){ return inRangeCount[b]-inRangeCount[a]; })
+      .map(function(nm) {
+        return '<span style="margin-right:14px"><strong>' + nm + '</strong> 本次' + inRangeCount[nm] + '班'
+          + '（本月累計' + ((monthCount[nm]||0) + inRangeCount[nm]) + '班）</span>';
+      }).join('')
+    + '</div>';
+
+  document.getElementById('autoPreview').innerHTML = warnHtml + summaryHtml
+    + '<strong style="color:var(--teal)">共排入 ' + previewLines.length + ' 筆</strong><br>'
+    + previewLines.slice(0,60).map(function(l){ return '<span style="color:var(--text2)">'+l+'</span>'; }).join('<br>')
+    + (previewLines.length > 60 ? '<br><em style="color:var(--text3)">... 還有 '+(previewLines.length-60)+' 筆</em>' : '');
 
   toast('ok', '✅ 自動排班完成！共 ' + previewLines.length + ' 筆，請確認後儲存');
 }
