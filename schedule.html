@@ -2613,6 +2613,28 @@ function getLastSlotKey(prefix, count) {
   return prefix + suffixes[count - 1];
 }
 
+
+// ── 員工功能函式 ──
+function toggleEmpFilter() {
+  empFilterOnly = !empFilterOnly;
+  var btn = document.getElementById('empFilterBtn');
+  if (btn) {
+    btn.className = empFilterOnly ? 'btn btn-p btn-sm' : 'btn btn-g btn-sm';
+    btn.textContent = empFilterOnly ? '👁 全部顯示' : '👤 只看我';
+  }
+  loadEmpHome();
+}
+
+function empPrevMonth() { empMonth--; if (empMonth < 1) { empMonth = 12; empYear--; } loadEmpHome(); }
+function empNextMonth() { empMonth++; if (empMonth > 12) { empMonth = 1; empYear++; } loadEmpHome(); }
+
+function initEmpBlocked() {
+  var today = new Date().toISOString().split('T')[0];
+  var dateEl = document.getElementById('eDate');
+  if (dateEl) { dateEl.value = today; dateEl.min = today; }
+  loadMyBlockedList();
+}
+
 // ═══════════════════════════════════════════════════════
 // Toast
 // ═══════════════════════════════════════════════════════
