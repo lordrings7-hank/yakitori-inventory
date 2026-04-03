@@ -611,8 +611,8 @@ tbody td:last-child{border-right:none}
           </div>
         </div>
         <div class="frow f3">
-          <div class="fgrp"><label class="flbl">A班時數(hr)</label><input class="finp" type="number" id="pyUHrs" value="6" min="1" max="12"></div>
-          <div class="fgrp"><label class="flbl">B班時數(hr)</label><input class="finp" type="number" id="pyLHrs" value="6" min="1" max="12"></div>
+          <div class="fgrp"><label class="flbl">A班時數(hr)</label><input class="finp" type="number" id="pyUHrs" value="6" min="1" max="12" onchange="globalUHrs=+this.value||6"></div>
+          <div class="fgrp"><label class="flbl">B班時數(hr)</label><input class="finp" type="number" id="pyLHrs" value="6" min="1" max="12" onchange="globalLHrs=+this.value||6"></div>
           <div class="fgrp"><label class="flbl">開收店津貼平分</label>
             <select class="finp" id="pySplitBonus"><option value="1">是（自動平分）</option><option value="0">否（每人全額）</option></select>
           </div>
@@ -864,6 +864,8 @@ let empMonth = new Date().getMonth() + 1;
 let pinInput = '';
 const empHist = [];
 let empFilterOnly = false;
+let globalUHrs = 6; // A班時數（全域）
+let globalLHrs = 6; // B班時數（全域）
 
 // 管理者PIN（固定）
 var MANAGER_PIN = localStorage.getItem('mgr_pin') || '1234'; // 管理者PIN
@@ -898,6 +900,10 @@ const PAG = { overview: '總覽', schedule: '排班管理', blocked: '禁排申�
 // ═══════════════════════════════════════════════════════
 // 初始化
 // ═══════════════════════════════════════════════════════
+// ── 預設連線資訊（自動登入）──
+var DEFAULT_SB_URL = 'https://xftwhljmhieeiasjdshr.supabase.co';
+var DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmdHdobGptaGllZWlhc2pkc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjA4MDMsImV4cCI6MjA5MDYzNjgwM30.gb_BDUVutdBjO_buPoCdiqtCty1CT_EMbPZPr4uVMsQ';
+
 document.addEventListener('DOMContentLoaded', function() {
   var now = new Date();
   document.getElementById('todayLbl').textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
@@ -949,17 +955,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('monthlyWageArea').style.display = isMonthly ? 'grid' : 'none';
   });
 
-  var url = localStorage.getItem('sb_url');
-  var key = localStorage.getItem('sb_key');
+  var url = localStorage.getItem('sb_url') || DEFAULT_SB_URL;
+  var key = localStorage.getItem('sb_key') || DEFAULT_SB_KEY;
+  document.getElementById('cfgUrl').value = url;
+  document.getElementById('cfgKey').value = key;
   if (url && key) doConnect(url, key);
 });
 
 function initApp() {
-  var url = document.getElementById('cfgUrl').value.trim();
-  var key = document.getElementById('cfgKey').value.trim();
+  var url = document.getElementById('cfgUrl').value.trim() || DEFAULT_SB_URL;
+  var key_val = document.getElementById('cfgKey').value.trim() || DEFAULT_SB_KEY;
+  var key = key_val;
   if (!url || !key) { toast('er', '請填寫 URL 和 Key'); return; }
   localStorage.setItem('sb_url', url);
   localStorage.setItem('sb_key', key);
+  document.getElementById('cfgUrl').value = url;
+  document.getElementById('cfgKey').value = key;
   doConnect(url, key);
 }
 
@@ -1041,26 +1052,63 @@ function handlePin(key) {
   if (pinInput.length === 4) verifyPin();
 }
 
+// SHA-256 hash 函式（瀏覽器原生）
+async function sha256hex(str) {
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+
 async function verifyPin() {
+  var display = document.getElementById('pinDisplay');
+
   if (loginMode === 'manager') {
-    if (pinInput === MANAGER_PIN) {
-      loginAsManager();
-    } else {
-      toast('er', '密碼錯誤');
-      pinInput = '';
-      document.getElementById('pinDisplay').textContent = '_ _ _ _';
+    // 查 DB 比對 hash
+    try {
+      var inputHash = await sha256hex(pinInput);
+      var r = await SB.from('app_config').select('value').eq('key','manager_pin_hash').single();
+      if (r.error || !r.data) {
+        // DB 查不到就 fallback 本地比對（首次設定前）
+        if (pinInput === MANAGER_PIN) { loginAsManager(); return; }
+        toast('er', '密碼錯誤'); pinInput = ''; display.textContent = '_ _ _ _'; return;
+      }
+      if (inputHash === r.data.value) {
+        loginAsManager();
+      } else {
+        toast('er', '密碼錯誤');
+        pinInput = ''; display.textContent = '_ _ _ _';
+      }
+    } catch(e) {
+      // 網路錯誤 fallback
+      if (pinInput === MANAGER_PIN) { loginAsManager(); return; }
+      toast('er', '驗證失敗，請重試');
+      pinInput = ''; display.textContent = '_ _ _ _';
     }
+
   } else {
     var staffId = document.getElementById('loginName').value;
-    if (!staffId) { toast('er', '請先選擇姓名'); pinInput = ''; document.getElementById('pinDisplay').textContent = '_ _ _ _'; return; }
+    if (!staffId) { toast('er', '請先選擇姓名'); pinInput = ''; display.textContent = '_ _ _ _'; return; }
     var st = allStaff.find(function(s) { return s.id === staffId; });
     if (!st) { toast('er', '找不到員工資料'); return; }
-    if (st.pin === pinInput || pinInput === '0000') {
-      loginAsEmployee(st);
-    } else {
-      toast('er', '密碼錯誤');
-      pinInput = '';
-      document.getElementById('pinDisplay').textContent = '_ _ _ _';
+
+    try {
+      var inputHash = await sha256hex(pinInput);
+      // 比對 hashed_pin（DB hash）
+      var matched = false;
+      if (st.hashed_pin) {
+        matched = (inputHash === st.hashed_pin);
+      } else {
+        // 還沒有 hash，用舊的明碼比對（相容舊資料）
+        matched = (st.pin === pinInput);
+      }
+      if (matched) {
+        loginAsEmployee(st);
+      } else {
+        toast('er', '密碼錯誤');
+        pinInput = ''; display.textContent = '_ _ _ _';
+      }
+    } catch(e) {
+      toast('er', '驗證失敗，請重試');
+      pinInput = ''; display.textContent = '_ _ _ _';
     }
   }
 }
@@ -1336,8 +1384,8 @@ async function estPay(list) {
       grp.slots.forEach(function(k) {
         var nm = row[k]; if (!nm) return;
         var st = list.find(function(s) { return s.name === nm; }); if (!st) return;
-        if (grp.session === 'upper') total += 6 * (st.upper_wage || st.base_wage || 0);
-        else if (grp.session === 'lower') total += 6 * (st.lower_wage || st.base_wage || 0);
+        if (grp.session === 'upper') total += globalUHrs * (st.upper_wage || st.base_wage || 0);
+        else if (grp.session === 'lower') total += globalLHrs * (st.lower_wage || st.base_wage || 0);
         else if (grp.role === 'opener') total += (st.open_bonus || 0);
         else if (grp.role === 'closer') total += (st.close_bonus || 0);
       });
@@ -1369,6 +1417,7 @@ async function loadSchedule() {
   var dateTo   = ym + '-' + String(daysInMonth).padStart(2,'0');
   var r1 = await SB.from('schedules').select('*').eq('store', STORE).gte('schedule_date', dateFrom).lte('schedule_date', dateTo);
   schedData = {};
+  dirtyFields = {}; // 清除未存的異動記錄
   (r1.data || []).forEach(function(r) {
     // Strip DB-only fields so they don't break future saves
     var clean = Object.assign({}, r);
@@ -1622,6 +1671,7 @@ function onCell(sel) {
   var ds = sel.dataset.ds, col = sel.dataset.col, val = sel.value;
   if (!schedData[ds]) schedData[ds] = { schedule_date: ds, store: STORE };
   schedData[ds][col] = val || null;
+  markDirty(ds, col); // 記錄異動
   var grp = GROUPS.find(function(g) { return g.slots.indexOf(col) !== -1; });
   var sLabel = !grp ? '' : grp.session === 'upper' ? '上半場' : grp.session === 'lower' ? '下半場' : grp.role === 'opener' ? '開店' : '收店';
   var wrapper = sel.closest('div[data-col]') || sel.closest('td');
@@ -1640,6 +1690,7 @@ function onNoteChange(inp) {
   var ds = inp.dataset.ds, val = inp.value;
   if (!schedData[ds]) schedData[ds] = { schedule_date: ds, store: STORE };
   schedData[ds].day_note = val || null;
+  markDirty(ds, 'day_note');
 }
 
 function recheckGrill(ds) {
@@ -1833,9 +1884,19 @@ function goToScheduleEdit() {
   goPage('schedule', document.querySelector('[data-p="schedule"]'));
 }
 
+// 記錄哪些欄位被修改過（只 patch 異動欄位）
+var dirtyFields = {}; // { 'YYYY-MM-DD': Set of changed column names }
+
+function markDirty(ds, col) {
+  if (!dirtyFields[ds]) dirtyFields[ds] = new Set();
+  dirtyFields[ds].add(col);
+  dirtyFields[ds].add('schedule_date');
+  dirtyFields[ds].add('store');
+}
+
 async function saveSchedule() {
-  var rows = Object.values(schedData).filter(function(r) { return r.schedule_date; });
-  if (!rows.length) { toast('wn', '沒有可儲存的排班'); return; }
+  var btn = document.querySelector('[onclick="saveSchedule()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 儲存中...'; }
 
   var VALID_COLS = ['schedule_date','store','day_note',
     'opener','opener_2',
@@ -1843,32 +1904,63 @@ async function saveSchedule() {
     'upper_grill_1','upper_grill_2','upper_grill_3','upper_grill_4',
     'lower_floor_1','lower_floor_2','lower_floor_3','lower_floor_4',
     'lower_grill_1','lower_grill_2','lower_grill_3','lower_grill_4',
-    'closer','closer_2'];
+    'closer','closer_2','day_note'];
 
-  var payload = rows.map(function(r) {
-    var obj = { store: STORE };
-    VALID_COLS.forEach(function(k) {
-      obj[k] = r[k] || null;
-    });
-    return obj;
-  });
-
-  console.log('[Save] rows:', payload.length, 'sample:', JSON.stringify(payload[0]));
-
-  var result = await SB.from('schedules').upsert(payload, {
-    onConflict: 'schedule_date,store',
-    ignoreDuplicates: false
-  });
-
-  if (result.error) {
-    console.error('[Save] error:', result.error);
-    toast('er', '儲存失敗：' + result.error.message);
+  // 只處理有異動的日期
+  var dirtyDates = Object.keys(dirtyFields);
+  if (!dirtyDates.length) {
+    toast('wn', '沒有修改需要儲存');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 儲存'; }
     return;
   }
 
-  console.log('[Save] success');
-  toast('ok', '✅ 儲存完成（' + payload.length + ' 天），排班不會消失');
-  // 不重新載入畫面，讓用戶繼續編輯
+  var errors = [];
+  var saved = 0;
+
+  for (var i = 0; i < dirtyDates.length; i++) {
+    var ds = dirtyDates[i];
+    var row = schedData[ds];
+    if (!row) continue;
+
+    // 先讀 DB 最新版本（防覆蓋）
+    var cur = await SB.from('schedules').select('*')
+      .eq('schedule_date', ds).eq('store', STORE).single();
+
+    var payload = { schedule_date: ds, store: STORE };
+
+    if (cur.data) {
+      // 有舊資料：只更新有異動的欄位（patch）
+      var changedCols = Array.from(dirtyFields[ds]).filter(function(c) {
+        return VALID_COLS.indexOf(c) !== -1;
+      });
+      changedCols.forEach(function(col) {
+        payload[col] = row[col] || null;
+      });
+    } else {
+      // 新資料：送全部欄位
+      VALID_COLS.forEach(function(k) { payload[k] = row[k] || null; });
+    }
+
+    var result = await SB.from('schedules').upsert(payload, {
+      onConflict: 'schedule_date,store',
+      ignoreDuplicates: false
+    });
+
+    if (result.error) {
+      errors.push(ds + ': ' + result.error.message);
+    } else {
+      saved++;
+      delete dirtyFields[ds]; // 清除已存的 dirty 標記
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '💾 儲存'; }
+
+  if (errors.length) {
+    toast('er', '部分儲存失敗：' + errors.join('; '));
+  } else {
+    toast('ok', '✅ 儲存完成（' + saved + ' 天）');
+  }
 }
 
 function prevWeek() { currentWeekStart = addDays(currentWeekStart, -7); loadSchedule(); }
@@ -1941,10 +2033,10 @@ async function calcPayroll() {
   var yr = +document.getElementById('pyYear').value;
   var mo = +document.getElementById('pyMonth').value;
   // 優先讀排班管理頁的時數設定
-  // 同步時數：排班頁 → 薪資頁
+  // 同步時數：優先用全域變數（排班頁設定的）
   syncHours();
-  var uH = +document.getElementById('pyUHrs').value || 6;
-  var lH = +document.getElementById('pyLHrs').value || 6;
+  var uH = globalUHrs || +document.getElementById('pyUHrs').value || 6;
+  var lH = globalLHrs || +document.getElementById('pyLHrs').value || 6;
   console.log('[Payroll] uH:', uH, 'lH:', lH);
 
   var store = document.getElementById('pyStore').value;
@@ -2403,9 +2495,8 @@ function syncHours() {
   var l = document.getElementById('scLHrs');
   var pu = document.getElementById('pyUHrs');
   var pl = document.getElementById('pyLHrs');
-  // 只有有效值（>0）才同步，避免空值覆蓋
-  if (u && pu && +u.value > 0) pu.value = u.value;
-  if (l && pl && +l.value > 0) pl.value = l.value;
+  if (u && +u.value > 0) { globalUHrs = +u.value; if (pu) pu.value = u.value; }
+  if (l && +l.value > 0) { globalLHrs = +l.value; if (pl) pl.value = l.value; }
 }
 
 function toggleAllDay() {
@@ -2486,19 +2577,36 @@ function loadSettings() {
     allStaff.map(function(s) { return '<option value="' + s.id + '">' + s.name + ' (' + s.store + ')</option>'; }).join('');
 }
 
-function changeManagerPin() {
+async function changeManagerPin() {
   var oldPin = document.getElementById('oldPin').value;
   var newPin = document.getElementById('newPin').value;
   var confirmPin = document.getElementById('confirmPin').value;
-  if (oldPin !== MANAGER_PIN) { toast('er', '目前密碼錯誤'); return; }
   if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) { toast('er', 'PIN 必須是4位數字'); return; }
   if (newPin !== confirmPin) { toast('er', '兩次輸入的新密碼不一致'); return; }
+
+  // 驗證舊密碼（查 DB hash）
+  var oldHash = await sha256hex(oldPin);
+  var r = await SB.from('app_config').select('value').eq('key','manager_pin_hash').single();
+  var dbHash = r.data ? r.data.value : null;
+  // 相容：DB 沒有 hash 時用舊的 MANAGER_PIN 比對
+  var oldOk = dbHash ? (oldHash === dbHash) : (oldPin === MANAGER_PIN);
+  if (!oldOk) { toast('er', '目前密碼錯誤'); return; }
+
+  // 更新 DB hash
+  var newHash = await sha256hex(newPin);
+  var r2 = await SB.from('app_config').upsert(
+    { key: 'manager_pin_hash', value: newHash },
+    { onConflict: 'key' }
+  );
+  if (r2.error) { toast('er', '更新失敗：' + r2.error.message); return; }
+
+  // 同步更新本地（fallback 用）
   MANAGER_PIN = newPin;
   localStorage.setItem('mgr_pin', newPin);
   document.getElementById('oldPin').value = '';
   document.getElementById('newPin').value = '';
   document.getElementById('confirmPin').value = '';
-  toast('ok', '✅ 管理者密碼已更新！');
+  toast('ok', '✅ 管理者密碼已更新並同步至資料庫！');
 }
 
 async function changeStaffPin() {
@@ -2506,7 +2614,9 @@ async function changeStaffPin() {
   var newPin = document.getElementById('setPinValue').value;
   if (!staffId) { toast('er', '請選擇員工'); return; }
   if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) { toast('er', 'PIN 必須是4位數字'); return; }
-  var result = await SB.from('staff').update({ pin: newPin }).eq('id', staffId);
+  // 同時更新明碼（相容）和 hash（安全）
+  var newHash = await sha256hex(newPin);
+  var result = await SB.from('staff').update({ pin: newPin, hashed_pin: newHash }).eq('id', staffId);
   if (result.error) { toast('er', '更新失敗'); return; }
   await loadStaff();
   document.getElementById('setPinValue').value = '';
