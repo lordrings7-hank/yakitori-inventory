@@ -611,8 +611,8 @@ tbody td:last-child{border-right:none}
           </div>
         </div>
         <div class="frow f3">
-          <div class="fgrp"><label class="flbl">A班時數(hr)</label><input class="finp" type="number" id="pyUHrs" value="6" min="1" max="12" onchange="globalUHrs=+this.value||6"></div>
-          <div class="fgrp"><label class="flbl">B班時數(hr)</label><input class="finp" type="number" id="pyLHrs" value="6" min="1" max="12" onchange="globalLHrs=+this.value||6"></div>
+          <div class="fgrp"><label class="flbl">A班時數(hr)</label><input class="finp" type="number" id="pyUHrs" value="6" min="1" max="12" onchange="globalUHrs=+this.value||6;SB.from('app_config').upsert({key:'upper_hrs',value:String(globalUHrs)},{onConflict:'key'})"></div>
+          <div class="fgrp"><label class="flbl">B班時數(hr)</label><input class="finp" type="number" id="pyLHrs" value="6" min="1" max="12" onchange="globalLHrs=+this.value||6;SB.from('app_config').upsert({key:'lower_hrs',value:String(globalLHrs)},{onConflict:'key'})"></div>
           <div class="fgrp"><label class="flbl">開收店津貼平分</label>
             <select class="finp" id="pySplitBonus"><option value="1">是（自動平分）</option><option value="0">否（每人全額）</option></select>
           </div>
@@ -864,8 +864,8 @@ let empMonth = new Date().getMonth() + 1;
 let pinInput = '';
 const empHist = [];
 let empFilterOnly = false;
-let globalUHrs = 6; // A班時數（全域）
-let globalLHrs = 6; // B班時數（全域）
+let globalUHrs = 6; // A班時數（從DB載入）
+let globalLHrs = 6; // B班時數（從DB載入）
 
 // 管理者PIN（固定）
 var MANAGER_PIN = localStorage.getItem('mgr_pin') || '1234'; // 管理者PIN
@@ -905,6 +905,7 @@ var DEFAULT_SB_URL = 'https://xftwhljmhieeiasjdshr.supabase.co';
 var DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmdHdobGptaGllZWlhc2pkc2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjA4MDMsImV4cCI6MjA5MDYzNjgwM30.gb_BDUVutdBjO_buPoCdiqtCty1CT_EMbPZPr4uVMsQ';
 
 document.addEventListener('DOMContentLoaded', function() {
+  // 時數從 DB 載入（在 doConnect 成功後會呼叫 loadAppConfig）
   var now = new Date();
   document.getElementById('todayLbl').textContent = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
@@ -983,6 +984,7 @@ async function doConnect(url, key) {
     document.getElementById('app').style.display = 'flex';
     await loadStaff();
     showLoginPage();
+    await loadAppConfig();
     toast('ok', '✅ 連線成功！');
   } catch(e) {
     toast('er', '連線失敗：' + (e.message || String(e)));
@@ -1703,14 +1705,13 @@ function recheckGrill(ds) {
 // ═══════════════════════════════════════════════════════
 var autoRules = {}; // { groupKey: [ staffName, ... ] }
 
-function initAutoSched() {
-  // 載入規則（從 localStorage）
+async function initAutoSched() {
+  // 從 DB 載入規則
   try {
-    var saved = localStorage.getItem('auto_rules_' + STORE);
-    autoRules = saved ? JSON.parse(saved) : {};
+    var ruleKey = 'auto_rules_' + STORE;
+    var r = await SB.from('app_config').select('value').eq('key', ruleKey).single();
+    autoRules = (r.data && r.data.value) ? JSON.parse(r.data.value) : {};
   } catch(e) { autoRules = {}; }
-
-  // 同步分店 select
   document.getElementById('asStore').value = STORE;
   renderAutoRules();
 }
@@ -1759,8 +1760,10 @@ function saveAutoRules() {
     var val = inp.value.trim();
     autoRules[grp.key] = val ? val.split(/[、,，]+/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
   });
-  localStorage.setItem('auto_rules_' + STORE, JSON.stringify(autoRules));
-  toast('ok', '✅ 排班規則已儲存');
+  // 存到 DB（跨裝置同步）
+  var ruleKey = 'auto_rules_' + STORE;
+  SB.from('app_config').upsert({key: ruleKey, value: JSON.stringify(autoRules)}, {onConflict: 'key'});
+  toast('ok', '✅ 排班規則已儲存（已同步至雲端）');
   renderAutoRules();
 }
 
@@ -2495,8 +2498,17 @@ function syncHours() {
   var l = document.getElementById('scLHrs');
   var pu = document.getElementById('pyUHrs');
   var pl = document.getElementById('pyLHrs');
-  if (u && +u.value > 0) { globalUHrs = +u.value; if (pu) pu.value = u.value; }
-  if (l && +l.value > 0) { globalLHrs = +l.value; if (pl) pl.value = l.value; }
+  if (u && +u.value > 0) {
+    globalUHrs = +u.value;
+    if (pu) pu.value = u.value;
+    // 存到 DB（非同步，不等待）
+    SB.from('app_config').upsert({key:'upper_hrs',value:String(globalUHrs)},{onConflict:'key'});
+  }
+  if (l && +l.value > 0) {
+    globalLHrs = +l.value;
+    if (pl) pl.value = l.value;
+    SB.from('app_config').upsert({key:'lower_hrs',value:String(globalLHrs)},{onConflict:'key'});
+  }
 }
 
 function toggleAllDay() {
