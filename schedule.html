@@ -1818,29 +1818,37 @@ async function runAutoSched() {
   var billingMo = dtFrom.getMonth() + 1;
   var billingYm = billingYr + '-' + String(billingMo).padStart(2,'0');
 
-  // ── 讀取既有排班（日期範圍內）──
+  // ── 讀取既有排班（日期範圍內，全店）──
   var r1 = await SB.from('schedules').select('*')
-    .eq('store', store).gte('schedule_date', dateFrom).lte('schedule_date', dateTo);
+    .gte('schedule_date', dateFrom).lte('schedule_date', dateTo);
+  // existData[ds] = 當前店的排班（存檔用）
+  // existDataAll[ds_store] = 全店排班（防撞用）
   var existData = {};
-  (r1.data || []).forEach(function(r) { existData[r.schedule_date] = r; });
+  var existDataAll = {}; // key: ds + '_' + row.store
+  (r1.data || []).forEach(function(r) {
+    if (r.store === store) existData[r.schedule_date] = r;
+    var allKey = r.schedule_date + '__' + r.store;
+    existDataAll[allKey] = r;
+  });
 
-  // ── 讀取上週排班（連班防呆用）──
+  // ── 讀取上週排班（全店，連班防呆用）──
   var prevWeekFrom = new Date(dtFrom); prevWeekFrom.setDate(dtFrom.getDate() - 7);
   var prevWeekTo   = new Date(dtFrom); prevWeekTo.setDate(dtFrom.getDate() - 1);
   var rPrev = await SB.from('schedules').select('*')
-    .eq('store', store)
     .gte('schedule_date', fmtDate(prevWeekFrom))
     .lte('schedule_date', fmtDate(prevWeekTo));
-  var prevData = {};
-  (rPrev.data || []).forEach(function(r) { prevData[r.schedule_date] = r; });
+  var prevData = {}; // key: ds + '__' + store（全店）
+  (rPrev.data || []).forEach(function(r) {
+    var allKey = r.schedule_date + '__' + r.store;
+    prevData[allKey] = r;
+  });
 
-  // ── 讀取本月已有排班（班數平均用）──
+  // ── 讀取本月已有排班（全店，班數平均用）──
   var monthFrom = billingYm + '-01';
   var monthPrevDay = new Date(dtFrom); monthPrevDay.setDate(dtFrom.getDate() - 1);
   var rMonth = { data: [] };
   if (fmtDate(monthPrevDay) >= monthFrom) {
     rMonth = await SB.from('schedules').select('*')
-      .eq('store', store)
       .gte('schedule_date', monthFrom)
       .lte('schedule_date', fmtDate(monthPrevDay));
   }
@@ -1857,6 +1865,7 @@ async function runAutoSched() {
 
   // ── 計算每人本月累積班數（開始日前）──
   var monthCount = {}; // { name: count }
+  // 月累計涵蓋全店（不限 store）
   (rMonth.data || []).forEach(function(row) {
     GROUPS.forEach(function(grp) {
       grp.slots.forEach(function(k) {
@@ -1868,18 +1877,31 @@ async function runAutoSched() {
   });
 
   // ── 計算每人連續上班天數（往前看7天）──
+  // 檢查某天某人在任何分店是否有排班（全域）
+  function workedOnDate(name, ds2) {
+    // 先查 prevData（上週全店）
+    var stores = ['漢口店', '樹孝店'];
+    for (var si = 0; si < stores.length; si++) {
+      var allKey = ds2 + '__' + stores[si];
+      var row = prevData[allKey] || existDataAll[allKey];
+      if (row && GROUPS.some(function(grp) {
+        return grp.slots.some(function(k) { return row[k] === name; });
+      })) return true;
+      // 也查本次 result（排班範圍內已排的）
+      if (result[ds2] && GROUPS.some(function(grp) {
+        return grp.slots.some(function(k) { return result[ds2][k] === name; });
+      })) return true;
+    }
+    return false;
+  }
+
   function getConsecutiveDays(name, upToDate) {
     var count = 0;
     var d = new Date(upToDate);
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < 13; i++) { // 最多往前看13天
       d.setDate(d.getDate() - 1);
       var ds2 = fmtDate(d);
-      var row = prevData[ds2] || existData[ds2];
-      if (!row) break;
-      var worked = GROUPS.some(function(grp) {
-        return grp.slots.some(function(k) { return row[k] === name; });
-      });
-      if (worked) count++;
+      if (workedOnDate(name, ds2)) count++;
       else break;
     }
     return count;
@@ -1936,9 +1958,21 @@ async function runAutoSched() {
             else break;
           }
 
-          // 同天同人不重複
+          // 同天同人不重複（本店）
           var alreadyToday = grp.slots.some(function(k) { return result[ds][k] === candidate; });
           if (alreadyToday) continue;
+
+          // 跨店雙排防撞：該員工當天在任何分店是否已有排班
+          var crossStoreConflict = false;
+          var otherStores = ['漢口店', '樹孝店'].filter(function(s) { return s !== store; });
+          otherStores.forEach(function(os) {
+            var osKey = ds + '__' + os;
+            var osRow = existDataAll[osKey];
+            if (osRow && GROUPS.some(function(grp2) {
+              return grp2.slots.some(function(k) { return osRow[k] === candidate; });
+            })) crossStoreConflict = true;
+          });
+          if (crossStoreConflict) continue; // 跨店已排，跳過
 
           // 連班防呆：上週連班 + 本次已排 ≤ 5（第6天警告，不排）
           var prevConsec = getConsecutiveDays(candidate, ds);
