@@ -996,6 +996,37 @@ async function doConnect(url, key) {
   }
 }
 
+async function loadAppConfig() {
+  try {
+    var r = await SB.from('app_config').select('key,value')
+      .in('key', ['upper_hrs','lower_hrs','auto_rules_漢口店','auto_rules_樹孝店']);
+    if (!r.data) return;
+    r.data.forEach(function(row) {
+      if (row.key === 'upper_hrs' && +row.value > 0) {
+        globalUHrs = +row.value;
+        var u1 = document.getElementById('scUHrs');
+        var u2 = document.getElementById('pyUHrs');
+        if (u1) u1.value = row.value;
+        if (u2) u2.value = row.value;
+      }
+      if (row.key === 'lower_hrs' && +row.value > 0) {
+        globalLHrs = +row.value;
+        var l1 = document.getElementById('scLHrs');
+        var l2 = document.getElementById('pyLHrs');
+        if (l1) l1.value = row.value;
+        if (l2) l2.value = row.value;
+      }
+      if (row.key === 'auto_rules_漢口店') {
+        try { var parsed = JSON.parse(row.value); if (parsed && typeof parsed === 'object') { if (STORE === '漢口店') autoRules = parsed; } } catch(e) {}
+      }
+      if (row.key === 'auto_rules_樹孝店') {
+        try { var parsed2 = JSON.parse(row.value); if (parsed2 && typeof parsed2 === 'object') { if (STORE === '樹孝店') autoRules = parsed2; } } catch(e) {}
+      }
+    });
+  } catch(e) { console.log('loadAppConfig error:', e); }
+}
+
+
 // ═══════════════════════════════════════════════════════
 // 登入系統
 // ═══════════════════════════════════════════════════════
