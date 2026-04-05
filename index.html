@@ -826,7 +826,26 @@ let storeData = {
   shuxiao: { items: [], orders: [], nextId: 1, nextOid: 1 }
 };
 let categories = ['肉類','海鮮','蔬菜','醬料','耗材'];
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => {
+  const tw = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return tw.toISOString().slice(0,10);
+};
+let _serverTimeOffset = 0; // Firebase server time offset in ms
+
+async function syncServerTime() {
+  try {
+    const res = await fetch(FB_URL + '/.info/serverTimeOffset.json');
+    const offset = await res.json();
+    if(typeof offset === 'number') _serverTimeOffset = offset;
+  } catch(e) {}
+}
+
+function serverToday() {
+  const d = new Date(Date.now() + _serverTimeOffset);
+  // 轉換為台灣時間 UTC+8
+  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return tw.toISOString().slice(0,10);
+}
 
 // Shortcuts to current store
 function sd() { return storeData[currentStore]; }
@@ -1283,7 +1302,13 @@ function renderInventory() {
   const search=document.getElementById('searchInput').value.toLowerCase();
   const cat=document.getElementById('catFilter').value;
   const sf=document.getElementById('statusFilter').value;
-  const filtered=getItems().filter(i=>(!search||i.name.includes(search))&&(!cat||i.cat===cat)&&(!sf||getStatus(i)===sf));
+  const filtered=getItems()
+    .filter(i=>(!search||i.name.includes(search))&&(!cat||i.cat===cat)&&(!sf||getStatus(i)===sf))
+    .sort((a,b)=>{
+      const da = a.lastIn || '2000-01-01';
+      const db = b.lastIn || '2000-01-01';
+      return db.localeCompare(da); // 最新在前
+    });
   const body=document.getElementById('inventoryBody');
   const isMobile = window.innerWidth <= 640;
   if(!filtered.length){body.innerHTML='<tr><td colspan="7"><div class="empty">找不到符合的食材</div></td></tr>';return;}
@@ -1349,36 +1374,60 @@ function renderInventory() {
 
 // ══ RENDER ALERTS ═════════════════════════════
 function renderAlerts() {
-  const needOrder=getItems().filter(i=>getStatus(i)!=='ok').sort((a,b)=>(getStatus(a)==='danger'?0:1)-(getStatus(b)==='danger'?0:1));
-  let html='';
-  if(!needOrder.length){html='<div class="empty" style="padding:4rem">✅ 目前所有食材庫存充足！</div>';}
-  else {
-    const d=needOrder.filter(i=>getStatus(i)==='danger'), w=needOrder.filter(i=>getStatus(i)==='warn');
-    if(d.length) html+=`<div class="alert-bar">🚨 有 ${d.length} 項食材庫存嚴重不足，請立即叫料！</div>`;
-    if(w.length) html+=`<div class="alert-bar warn">⚠️ 有 ${w.length} 項食材庫存偏低，請盡快安排。</div>`;
-    // LINE 通知按鈕
-    html+=`<div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
+  const todayStr = serverToday();
+
+  function daysDiff(dateStr) {
+    if(!dateStr) return 999;
+    const diff = (new Date(todayStr) - new Date(dateStr)) / (1000*60*60*24);
+    return Math.round(diff);
+  }
+
+  function freshnessTag(dateStr) {
+    const days = daysDiff(dateStr);
+    if(days === 0) return `<span style="font-size:.68rem;padding:2px 7px;border-radius:10px;background:rgba(74,232,154,.15);color:var(--ok);">今天</span>`;
+    if(days === 1) return `<span style="font-size:.68rem;padding:2px 7px;border-radius:10px;background:rgba(232,197,58,.12);color:var(--warn);">昨天</span>`;
+    if(days <= 3) return `<span style="font-size:.68rem;padding:2px 7px;border-radius:10px;background:rgba(232,197,58,.12);color:var(--warn);">${days}天前</span>`;
+    return `<span style="font-size:.68rem;padding:2px 7px;border-radius:10px;background:rgba(232,74,58,.12);color:var(--danger);">${days}天前</span>`;
+  }
+
+  // 依最新盤點時間排序（新的在前）
+  const needOrder = getItems()
+    .filter(i => getStatus(i) !== 'ok')
+    .sort((a, b) => {
+      const da = a.lastIn || '2000-01-01';
+      const db = b.lastIn || '2000-01-01';
+      return db.localeCompare(da); // 新的在前
+    });
+
+  let html = '';
+  if(!needOrder.length){
+    html = '<div class="empty" style="padding:4rem">✅ 目前所有食材庫存充足！</div>';
+  } else {
+    const d = needOrder.filter(i=>getStatus(i)==='danger');
+    const w = needOrder.filter(i=>getStatus(i)==='warn');
+    if(d.length) html += `<div class="alert-bar">🚨 有 ${d.length} 項食材庫存嚴重不足，請立即叫料！</div>`;
+    if(w.length) html += `<div class="alert-bar warn">⚠️ 有 ${w.length} 項食材庫存偏低，請盡快安排。</div>`;
+    html += `<div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;">
       <button class="btn btn-warn btn-sm" onclick="openLineOrder('weekly')">📅 複製週日叫料清單</button>
       <button class="btn btn-line btn-sm" onclick="openLineOrder('daily')" style="background:rgba(74,232,154,.15);color:var(--ok);border:1px solid rgba(74,232,154,.3);">🥬 複製每日蔬菜清單</button>
     </div>`;
-    html+=`<div class="table-wrap"><table>
-      <thead><tr><th>食材</th><th>類型</th><th>分類</th><th>現有</th>${isAdmin()?'<th>安全庫存</th><th>缺口</th>':''}<th>狀態</th>${isAdmin()?'<th>操作</th>':''}</tr></thead>
-      <tbody>${needOrder.map(item=>{
-        const s=getStatus(item), gap=Math.max(0,item.safe-item.qty);
-        const ot=item.orderType||'weekly';
-        const otBadge=ot==='daily'?'<span class="order-type-tag order-type-daily">🥬每日</span>':'<span class="order-type-tag order-type-weekly">📅週日</span>';
-        return`<tr>
+    html += `<div class="table-wrap"><table>
+      <thead><tr><th>食材</th><th>分類</th><th>現有</th>${isAdmin()?'<th>缺口</th>':''}<th>狀態</th><th>最後盤點</th>${isAdmin()?'<th>操作</th>':''}</tr></thead>
+      <tbody>${needOrder.map(item => {
+        const s = getStatus(item);
+        const gap = Math.max(0, item.safe - item.qty);
+        return `<tr>
           <td class="name">${item.name}</td>
-          <td>${otBadge}</td>
           <td><span class="badge badge-cat">${item.cat}</span></td>
-          <td class="mono">${item.qty} ${item.unit}</td>
-          ${isAdmin()?`<td class="mono">${item.safe} ${item.unit}</td><td class="mono" style="color:var(--${s==='danger'?'danger':'warn'})">${gap>0?'−'+gap:'—'} ${item.unit}</td>`:''}
+          <td class="mono">${item.stockMode==='yn' ? '—' : item.qty+' '+item.unit}</td>
+          ${isAdmin() ? `<td class="mono" style="color:var(--${s==='danger'?'danger':'warn'})">${item.stockMode==='yn'?'需叫料':gap>0?'−'+gap+' '+item.unit:'—'}</td>` : ''}
           <td><span class="badge badge-${s}">${statusLabel(s)}</span></td>
-          ${isAdmin()?`<td><button class="btn btn-primary btn-sm" onclick="quickOrder(${item.id})">立即叫料</button></td>`:''}
+          <td>${freshnessTag(item.lastIn)}</td>
+          ${isAdmin() ? `<td><button class="btn btn-primary btn-sm" onclick="quickOrder(${item.id})">立即叫料</button></td>` : ''}
         </tr>`;
       }).join('')}</tbody></table></div>`;
   }
-  document.getElementById('alertContent').innerHTML=html;
+  document.getElementById('alertContent').innerHTML = html;
 }
 
 // ══ RENDER ORDERS ════════════════════════════
@@ -1901,6 +1950,7 @@ function fallbackCopy(text) {
 // ══ STAFF STOCKTAKE (大卡片) ════════════════
 let sstData = {};
 let sstActiveCat = '';
+let sstViewedCats = new Set(); // 記錄員工看過哪些分類
 
 function showStaffStoreSelect() {
   // Copy logo src to staff store page
@@ -1975,6 +2025,7 @@ function confirmStoreNo() {
 function openStaffStocktake() {
   sstData = {};
   sstActiveCat = '';
+  sstViewedCats = new Set();
   // Update store name and banner color
   document.getElementById('sstStoreName').textContent = STORE_NAMES[currentStore];
   const banner = document.getElementById('sstStoreBanner');
@@ -1999,6 +2050,8 @@ function renderSstCatFilter() {
 
 function sstSetCat(cat) {
   sstActiveCat = cat === '全部' ? '' : cat;
+  if(sstActiveCat) sstViewedCats.add(sstActiveCat);
+  else getItems().forEach(i => sstViewedCats.add(i.cat)); // 全部 = 所有分類都看過
   renderSstCatFilter();
   renderSstGrid();
 }
@@ -2140,19 +2193,29 @@ function saveStocktakeStaff() {
 
 function confirmDoneYes() {
   // 真正儲存
-  const t = today();
+  const t = serverToday();
   let count = 0;
+
+  // 1. 有輸入的品項：更新數量 + 時間
   Object.entries(sstData).forEach(([id, val]) => {
     if(val === undefined || val === null) return;
     const item = getItems().find(i=>i.id===parseInt(id));
     if(!item) return;
     if(item.stockMode === 'yn') {
-      // yn 模式：true=夠用, false=需叫料
       item.needOrder = (val === false);
       item.lastIn = t;
       count++;
     } else if(typeof val === 'number' && val >= 0) {
-      item.qty = val; item.lastIn = t; count++;
+      item.qty = val;
+      item.lastIn = t;
+      count++;
+    }
+  });
+
+  // 2. 沒有輸入但有顯示在畫面上的品項：只更新時間（數量不動）
+  getItems().filter(i => sstViewedCats.has(i.cat) || sstActiveCat === '' ).forEach(item => {
+    if(sstData[item.id] === undefined) {
+      item.lastIn = t;
     }
   });
   document.getElementById('stocktakeDoneOverlay').style.display = 'none';
@@ -2201,10 +2264,11 @@ function updateStocktake(id,val){
 }
 function saveStocktake(){
   let count=0;
+  const t = serverToday();
   Object.entries(stocktakeData).forEach(([id,val])=>{
     if(val===undefined||val===null)return;
     const item=getItems().find(i=>i.id===parseInt(id));
-    if(item&&val>=0){item.qty=val;item.lastIn=today();count++;}
+    if(item&&val>=0){item.qty=val;item.lastIn=t;count++;}
   });
   if(!count){toast('沒有輸入任何數量');closeModal('stocktake');return;}
   closeModal('stocktake');
@@ -2464,7 +2528,8 @@ function renderAll(){renderStats();renderInventory();refreshCatSelects();}
 
 // ══ INIT ════════════════════════════════════
 (async function init(){
-  // 先從 Firebase 載入密碼，再顯示登入畫面
+  // 先同步 server time，再載入密碼
+  await syncServerTime();
   try {
     const res = await fetch(FB_URL + '/data.json');
     const data = await res.json();
